@@ -9,6 +9,17 @@ import {
   institutionLens,
   exoticSignals,
 } from './data/marketData';
+import {
+  soWhat_Part0,
+  soWhat_Part1,
+  soWhat_Part2,
+  soWhat_Part3,
+  soWhat_Part4,
+  soWhat_Part5,
+  soWhat_Part6,
+  soWhat_Appendix,
+} from './data/soWhatData';
+import SoWhatSection from './components/SoWhatSection';
 
 type Tab = 'dashboard' | 'directive' | 'scenarios' | 'synthesis' | 'institution' | 'exotic';
 
@@ -230,6 +241,9 @@ function DashboardTab() {
           </table>
         </div>
       </div>
+
+      {/* SO-WHAT? Section */}
+      <SoWhatSection data={soWhat_Part0} partTitle="Part 0 — Dashboard / Current State" />
     </div>
   );
 }
@@ -352,6 +366,9 @@ function DirectiveTab() {
           </section>
         </div>
       </div>
+
+      {/* SO-WHAT? Section */}
+      <SoWhatSection data={soWhat_Part1} partTitle="Part 1 — The Warsh Reality Check" />
     </div>
   );
 }
@@ -496,6 +513,12 @@ function ScenariosTab() {
           </div>
         </div>
       </div>
+
+      {/* SO-WHAT? Section — changes with active scenario */}
+      <SoWhatSection
+        data={activeScenario === 'A' ? soWhat_Part2 : activeScenario === 'B' ? soWhat_Part3 : soWhat_Part4}
+        partTitle={`Scenario ${activeScenario} — ${scenarioData.subtitle}`}
+      />
     </div>
   );
 }
@@ -608,6 +631,9 @@ function SynthesisTab() {
           </table>
         </div>
       </div>
+
+      {/* SO-WHAT? Section */}
+      <SoWhatSection data={soWhat_Part5} partTitle="Part 5 — Synthesis: Trades & Signposts" />
     </div>
   );
 }
@@ -672,6 +698,9 @@ function InstitutionTab() {
           </div>
         </div>
       </div>
+
+      {/* SO-WHAT? Section */}
+      <SoWhatSection data={soWhat_Part6} partTitle="Part 6 — Bank Treasury Impact" />
     </div>
   );
 }
@@ -761,6 +790,9 @@ function ExoticTab() {
           </div>
         </div>
       </div>
+
+      {/* SO-WHAT? Section */}
+      <SoWhatSection data={soWhat_Appendix} partTitle="Appendix — Exotic Signals & Second-Order Effects" />
     </div>
   );
 }
