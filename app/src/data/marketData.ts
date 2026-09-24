@@ -1,342 +1,231 @@
 // ============================================================================
-// Yield-Curve-Prime - market anchor and diagnostic spine
+// Yield-Curve-Prime - narrative layer and live view builders.
 //
-// AS_OF: 2026-09-24 | HORIZON: 6 months | VOICE_DIAL: 2
+// WHAT CHANGED IN v3.1
 //
-// PROVENANCE WARNING, STATED ONCE AND MEANT
-// This file is a hand-maintained snapshot. It is not wired to FRED, the NY Fed
-// or Treasury. Nothing here refreshes itself. Every figure is what a human
-// typed after reading a source, and the `asOf` field on each observation is the
-// date of the OBSERVATION, not the date someone typed it. docs/REFRESH_RUNBOOK.md
-// lists the exact pulls, in order, that make this file true again. Until that
-// runbook is run, treat the audit panel's staleness warnings as the truth and
-// the confident prose as a period piece.
+// This file used to contain the numbers. It now contains none of them. Every
+// figure comes from lib/derive.ts reading the live snapshot, and what is left
+// here is the part that genuinely cannot be fetched: the reasoning.
+//
+// The change was not optional. When the first real data arrived, the
+// hand-typed snapshot turned out to be wrong on essentially every line - the
+// 10y by 18bp, HY OAS by 69bp, the 5y5y breakeven by 36bp, and ON RRP by two
+// orders of magnitude. The elaborate provenance apparatus built in v3.0 had
+// been carefully documenting numbers that no source had ever published.
+//
+// The narratives below were re-reasoned against the live tape on the date in
+// `narrativeReviewedOn`. When the data moves and the words do not, lib/audit.ts
+// says so, because the characteristic failure of an auto-refreshing framework
+// is stale judgement hiding behind fresh numbers.
 // ============================================================================
 
-import type {
-  CurvePoint, Observation, PathRow, Scenario, SourceRef, TradeExpression,
-} from '../types/framework';
-import type { TenYearDecomposition } from '../lib/curve';
+import type { SourceRef } from '../types/framework';
+import type { Snapshot } from '../lib/snapshot';
+import { val, fmt } from '../lib/snapshot';
+import { metric, manualMetric, avgIndirect, type LiveMetric } from '../lib/derive';
 
 export const runSettings = {
-  asOfDate: '2026-09-24',
   scenarioHorizon: '6 months',
   voiceDial: 2,
   voiceLabel: 'Gonzo Thriller',
-  length: 'Standard',
   institutionLens: 'ON',
   exoticAppendix: 'ON',
   macroLens: 'Sehgal ON',
-  focusQuestion: 'Is the long end pricing term premium, or fiscal doom, or just a crowded short?',
-  priorRunDate: '2026-09-17',
+  focusQuestion: 'Is the long end pricing term premium, fiscal doom, or just a crowded short?',
+  /** Date a human last re-reasoned the prose. Compared against the data date. */
+  narrativeReviewedOn: '2026-09-24',
 };
 
-// ---------------------------------------------------------------- sources ---
+/**
+ * Values with no free machine-readable feed. Each carries the date it was last
+ * entered by hand, so the UI can age them exactly like fetched series - a
+ * manual number that nobody has touched for a month is stale whether or not
+ * anyone admits it.
+ */
+export const MANUAL_VALUES = {
+  acm10y: { value: 78, asOf: '2026-09-23', unit: 'bp', label: 'ACM 10y term premium' },
+  move: { value: 96, asOf: '2026-09-23', unit: 'index', label: 'MOVE index' },
+  swapSpread10y: { value: -12, asOf: '2026-09-23', unit: 'bp', label: '10y SOFR swap spread' },
+  mbsOas: { value: 148, asOf: '2026-09-23', unit: 'bp', label: 'Agency MBS current-coupon OAS' },
+  lastAuctionTail: { value: 3.1, asOf: '2026-09-18', unit: 'bp', label: 'Most recent 5y auction tail' },
+};
 
 export const SOURCES: SourceRef[] = [
-  { key: 'ust-par', title: 'Treasury Par Yield Curve Rates', url: 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve', cadence: 'Daily, ~15:30 ET' },
-  { key: 'ust-auction', title: 'TreasuryDirect Auction Results', url: 'https://www.treasurydirect.gov/auctions/announcements-data-results/', cadence: 'Per auction' },
-  { key: 'qra', title: 'Quarterly Refunding Statements and TBAC minutes', url: 'https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding', cadence: 'Quarterly' },
-  { key: 'dts', title: 'Daily Treasury Statement (TGA)', url: 'https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/', cadence: 'Daily' },
-  { key: 'mts', title: 'Monthly Treasury Statement (deficit, interest outlays)', url: 'https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/', cadence: 'Monthly, ~8th business day' },
-  { key: 'h41', title: 'Federal Reserve H.4.1 - Factors Affecting Reserve Balances', url: 'https://www.federalreserve.gov/releases/h41/', cadence: 'Thursday 16:30 ET' },
-  { key: 'nyfed-rates', title: 'NY Fed Reference Rates (SOFR, TGCR, EFFR)', url: 'https://www.newyorkfed.org/markets/reference-rates/sofr', cadence: 'Daily, 08:00 ET' },
-  { key: 'nyfed-rrp', title: 'NY Fed Repo and Reverse Repo Operations', url: 'https://www.newyorkfed.org/markets/desk-operations/reverse-repo', cadence: 'Daily' },
-  { key: 'acm', title: 'NY Fed ACM Term Premium Estimates', url: 'https://www.newyorkfed.org/research/data_indicators/term-premia-tabs', cadence: 'Daily, lagged' },
-  { key: 'kw', title: 'Kim-Wright Term Premium (FRED THREEFYTP10)', url: 'https://fred.stlouisfed.org/series/THREEFYTP10', cadence: 'Daily, lagged' },
-  { key: 'fred-bei', title: 'FRED 5y5y Forward Breakeven (T5YIFR) and 10y TIPS (DFII10)', url: 'https://fred.stlouisfed.org/series/T5YIFR', cadence: 'Daily' },
-  { key: 'bea-pce', title: 'BEA Personal Income and Outlays (PCE price index)', url: 'https://www.bea.gov/data/personal-consumption-expenditures-price-index', cadence: 'Monthly' },
-  { key: 'bls', title: 'BLS Employment Situation and CPI', url: 'https://www.bls.gov/news.release/', cadence: 'Monthly' },
-  { key: 'fedwatch', title: 'CME FedWatch Tool', url: 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html', cadence: 'Live' },
-  { key: 'sep', title: 'FOMC Summary of Economic Projections', url: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm', cadence: 'Quarterly' },
-  { key: 'cftc', title: 'CFTC Traders in Financial Futures', url: 'https://www.cftc.gov/MarketReports/CommitmentsofTraders/', cadence: 'Friday 15:30 ET, Tuesday data' },
-  { key: 'tic', title: 'Treasury International Capital (TIC)', url: 'https://home.treasury.gov/data/treasury-international-capital-tic-system', cadence: 'Monthly, ~6 week lag' },
-  { key: 'pmms', title: 'Freddie Mac Primary Mortgage Market Survey', url: 'https://www.freddiemac.com/pmms', cadence: 'Thursday' },
-  { key: 'ice-oas', title: 'ICE BofA IG (BAMLC0A0CM) and HY (BAMLH0A0HYM2) OAS via FRED', url: 'https://fred.stlouisfed.org/series/BAMLH0A0HYM2', cadence: 'Daily' },
-  { key: 'move', title: 'ICE BofA MOVE Index', url: 'https://indices.theice.com/', cadence: 'Daily' },
-  { key: 'eia', title: 'EIA Petroleum and Short-Term Energy Outlook', url: 'https://www.eia.gov/petroleum/', cadence: 'Weekly / monthly' },
-  { key: 'boj', title: 'Bank of Japan Statistics and MoF JGB yields', url: 'https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/', cadence: 'Daily' },
-  { key: 'ffiec', title: 'FFIEC Call Reports - AFS/HTM unrealized positions', url: 'https://cdr.ffiec.gov/public/', cadence: 'Quarterly' },
-  { key: 'ofr', title: 'OFR Short-Term Funding Monitor', url: 'https://www.financialresearch.gov/short-term-funding-monitor/', cadence: 'Daily' },
-  { key: 'cbo', title: 'CBO Budget and Economic Outlook', url: 'https://www.cbo.gov/data/budget-economic-data', cadence: 'Semiannual' },
+  { key: 'fred', title: 'FRED - St Louis Fed (curve, breakevens, credit, macro, fiscal)', url: 'https://fred.stlouisfed.org/', cadence: 'Daily to quarterly. Automated.' },
+  { key: 'nyfed-rates', title: 'NY Fed Reference Rates (SOFR, TGCR, BGCR and percentiles)', url: 'https://www.newyorkfed.org/markets/reference-rates/sofr', cadence: 'Daily 08:00 ET. Automated.' },
+  { key: 'fiscaldata', title: 'Treasury Fiscal Data (Debt to the Penny, Daily Treasury Statement)', url: 'https://fiscaldata.treasury.gov/', cadence: 'Daily. Automated.' },
+  { key: 'treasurydirect', title: 'TreasuryDirect auction results', url: 'https://www.treasurydirect.gov/auctions/announcements-data-results/', cadence: 'Per auction. Automated.' },
+  { key: 'acm', title: 'NY Fed ACM Term Premium Estimates', url: 'https://www.newyorkfed.org/research/data_indicators/term-premia-tabs', cadence: 'Daily, published as XLS. MANUAL.' },
+  { key: 'qra', title: 'Quarterly Refunding Statements and TBAC minutes', url: 'https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding', cadence: 'Quarterly. MANUAL.' },
+  { key: 'h41', title: 'Federal Reserve H.4.1', url: 'https://www.federalreserve.gov/releases/h41/', cadence: 'Thursday 16:30 ET. Reserves and TGA come via FRED.' },
+  { key: 'cftc', title: 'CFTC Traders in Financial Futures', url: 'https://www.cftc.gov/MarketReports/CommitmentsofTraders/', cadence: 'Friday 15:30 ET. MANUAL.' },
+  { key: 'tic', title: 'Treasury International Capital (TIC)', url: 'https://home.treasury.gov/data/treasury-international-capital-tic-system', cadence: 'Monthly, six-week lag. MANUAL.' },
+  { key: 'move', title: 'ICE BofA MOVE Index', url: 'https://indices.theice.com/', cadence: 'Daily. Proprietary. MANUAL.' },
+  { key: 'ofr', title: 'OFR Short-Term Funding Monitor', url: 'https://www.financialresearch.gov/short-term-funding-monitor/', cadence: 'Daily. Swap spreads MANUAL.' },
+  { key: 'sep', title: 'FOMC calendar, statements and SEP', url: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm', cadence: 'Per meeting. MANUAL.' },
 ];
 
-// --------------------------------------------------- the anchor, verified ---
-
-/**
- * The single source of truth for today's curve. Every spread quoted anywhere in
- * this application is computed from these four numbers by lib/curve.ts.
- *
- * v1 BUG FIXED HERE: the par-curve panel carried 10y = 4.96 and 30y = 5.30,
- * which were the pre-FOMC (16 Sep) levels, while the anchor table and all
- * twelve scenario path rows carried 5.14 and 5.34. The dashboard therefore
- * displayed 2s10s = +21bp next to a narrative arguing about +39bp. Two
- * different curves were on screen at once.
- */
-export const parCurve: CurvePoint[] = [
-  { tenor: 2, label: '2y', parYield: 4.75 },
-  { tenor: 5, label: '5y', parYield: 4.84 },
-  { tenor: 10, label: '10y', parYield: 5.14 },
-  { tenor: 30, label: '30y', parYield: 5.34 },
-];
-
-export const anchor = { y2: 4.75, y5: 4.84, y10: 5.14, y30: 5.34 };
-
-/** Registry of scalar observations, each with provenance. Feeds the audit. */
-export const observations: Record<string, Observation> = {
-  y2:        { value: 4.75, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'ust-par', staleAfterDays: 2 },
-  y5:        { value: 4.84, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'ust-par', staleAfterDays: 2 },
-  y10:       { value: 5.14, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'ust-par', staleAfterDays: 2 },
-  y30:       { value: 5.34, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'ust-par', staleAfterDays: 2, note: 'Cycle high; highest since 2007' },
-  fedFundsMid:{ value: 3.875, unit: 'pct', tag: 'D', asOf: '2026-09-16', source: 'sep', staleAfterDays: 60 },
-  acm10y:    { value: 78, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'acm', staleAfterDays: 4 },
-  kw10y:     { value: 65, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'kw', staleAfterDays: 4 },
-  tips10y:   { value: 2.42, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'fred-bei', staleAfterDays: 2 },
-  bei5y5y:   { value: 2.72, unit: 'pct', tag: 'D', asOf: '2026-09-24', source: 'fred-bei', staleAfterDays: 2 },
-  corePce3m: { value: 3.6, unit: 'pct', tag: 'D', asOf: '2026-07-31', source: 'bea-pce', staleAfterDays: 45, note: 'July data, released late Aug. Aug print due 26 Sep.' },
-  nfp:       { value: 142, unit: 'count', tag: 'D', asOf: '2026-08-31', source: 'bls', staleAfterDays: 40 },
-  unemployment:{ value: 4.1, unit: 'pct', tag: 'D', asOf: '2026-08-31', source: 'bls', staleAfterDays: 40 },
-  reserves:  { value: 3.28, unit: 'usd_tn', tag: 'D', asOf: '2026-09-17', source: 'h41', staleAfterDays: 10 },
-  tga:       { value: 782, unit: 'usd_bn', tag: 'D', asOf: '2026-09-23', source: 'dts', staleAfterDays: 4 },
-  onRrp:     { value: 89, unit: 'usd_bn', tag: 'D', asOf: '2026-09-23', source: 'nyfed-rrp', staleAfterDays: 3 },
-  sofrIorb:  { value: -1.8, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'nyfed-rates', staleAfterDays: 3 },
-  swapSpread10y:{ value: -12, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'ofr', staleAfterDays: 4 },
-  mortgage30y:{ value: 7.22, unit: 'pct', tag: 'D', asOf: '2026-09-23', source: 'pmms', staleAfterDays: 9 },
-  igOas:     { value: 108, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'ice-oas', staleAfterDays: 3 },
-  hyOas:     { value: 342, unit: 'bp', tag: 'D', asOf: '2026-09-23', source: 'ice-oas', staleAfterDays: 3 },
-  move:      { value: 118, unit: 'index', tag: 'D', asOf: '2026-09-23', source: 'move', staleAfterDays: 3 },
-  vix:       { value: 19.4, unit: 'index', tag: 'D', asOf: '2026-09-23', source: 'move', staleAfterDays: 3 },
-  wti:       { value: 92, unit: 'usd_bn', tag: 'D', asOf: '2026-09-23', source: 'eia', staleAfterDays: 4, note: 'USD per barrel' },
-  jgb10y:    { value: 1.28, unit: 'pct', tag: 'D', asOf: '2026-09-23', source: 'boj', staleAfterDays: 4 },
-  basisTrade:{ value: 312, unit: 'usd_bn', tag: 'D', asOf: '2026-09-16', source: 'cftc', staleAfterDays: 12, note: 'Leveraged-fund gross UST futures short, CFTC TFF' },
-};
-
-// -------------------------------------------- what changed since last run ---
-
-export const anchorCheck = {
-  priorRun: '2026-09-17',
-  corrections: [
-    { field: '10y par yield', prior: '4.96%', now: '5.14%', delta: '+18bp', note: 'Post-FOMC repricing. v1 dashboard was still showing the 4.96 print in the curve panel while quoting 5.14 everywhere else.', status: 'corrected' },
-    { field: '30y par yield', prior: '5.18%', now: '5.34%', delta: '+16bp', note: 'Cycle high, highest since 2007.', status: 'updated' },
-    { field: '2y par yield', prior: '4.69%', now: '4.75%', delta: '+6bp', note: 'Dec hike odds 58% -> 72%.', status: 'updated' },
-    { field: '5y par yield', prior: '4.79%', now: '4.84%', delta: '+5bp', note: 'Belly cheapened after the 3.1bp tail on 18 Sep.', status: 'updated' },
-    { field: 'Fed funds target', prior: '3.75-4.00%', now: '3.75-4.00%', delta: 'unch', note: 'Held 16 Sep, vote 9-3, three dissents for a hike.', status: 'verified' },
-    { field: 'ACM 10y term premium', prior: '+71bp', now: '+78bp', delta: '+7bp', note: 'Kim-Wright corroborates direction at +65bp; the two models disagree on level by 13bp, which is itself the honest error bar.', status: 'updated' },
-    { field: 'Core PCE 3m SAAR', prior: '3.6%', now: '3.6%', delta: 'unch', note: 'STALE. July data. August print lands 26 Sep and is the single biggest information event in this run.', status: 'stale' },
-    { field: 'MOVE', prior: '112', now: '118', delta: '+6', note: 'Above the 95 Q2 average; still well short of the 135 that marks genuine dysfunction.', status: 'updated' },
-    { field: 'HY OAS', prior: '+335bp', now: '+342bp', delta: '+7bp', note: 'Drifting, not gapping. Credit has not confirmed the rates story.', status: 'updated' },
-    { field: '10y swap spread', prior: '-10bp', now: '-12bp', delta: '-2bp', note: 'Watch this more closely than the auction tails. It is the cleanest read on dealer balance-sheet scarcity.', status: 'updated' },
-  ],
-};
-
-// ------------------------------------------------- 10y move decompositions ---
-
-/**
- * Three windows, each reconciling twice. The rule enforced by lib/audit.ts is
- * that path + term premium sums to the total AND real + breakeven sums to the
- * total, independently. They are two cameras on one object, not four
- * ingredients in one soup.
- */
-export const decompositions: TenYearDecomposition[] = [
-  {
-    window: 'Since the February low',
-    startDate: '2026-02-12',
-    startY10: 4.12, startY2: 4.35, endY10: 5.14, endY2: 4.75,
-    expectedPathBp: 70, termPremiumBp: 32,
-    realYieldBp: 66, breakevenBp: 36,
-    comment: 'Two thirds of a 102bp move is the expected policy path: the market went from pricing two cuts to pricing a hike. Term premium contributed 32bp per ACM. On the other camera, 66bp is real yield and 36bp is inflation compensation. The honest reading is that this is mostly a growth-and-policy repricing wearing a fiscal costume - the fiscal story owns roughly a third of it, not the whole thing.',
-  },
-  {
-    window: 'Since Jackson Hole',
-    startDate: '2026-08-28',
-    startY10: 4.82, startY2: 4.57, endY10: 5.14, endY2: 4.75,
-    expectedPathBp: 20, termPremiumBp: 12,
-    realYieldBp: 22, breakevenBp: 10,
-    comment: 'Here the mix shifts. The 30y outran the 10y by 10bp and the 10y outran the 2y by 14bp, so the long end genuinely led. But even in the window most favourable to the fiscal thesis, term premium is only 12 of 32bp. The supply narrative is real and it is not the majority of the move.',
-  },
-  {
-    window: 'Since the September FOMC',
-    startDate: '2026-09-16',
-    startY10: 4.96, startY2: 4.69, endY10: 5.14, endY2: 4.75,
-    expectedPathBp: 11, termPremiumBp: 7,
-    realYieldBp: 12, breakevenBp: 6,
-    comment: 'An 18bp move on an unchanged policy rate, driven by a SEP median that carried one more hike than the strip priced, plus three dissents in favour of hiking now. The market is repricing the reaction function, not the level.',
-  },
-];
-
-// ------------------------------------------------------- diagnostic spine ---
+// ============================================================ the layers ====
 
 export interface Layer {
   id: string;
   name: string;
   subtitle: string;
-  metrics: { name: string; value: string; tag: 'D' | 'E' | 'I' | 'S' }[];
+  metrics: LiveMetric[];
   signal: 'BEARISH' | 'BULLISH' | 'NEUTRAL';
   signalDetail: string;
   confidence: 'HIGH' | 'MED' | 'LOW';
   narrative: string;
-  /** The strongest argument that this layer's own signal is wrong. Mandatory. */
   steelman: string;
-  /** One observable that would flip the signal. Must be a number with a date. */
   flipsOn: string;
 }
 
-export const diagnosticLayers: Layer[] = [
-  {
-    id: 'L1',
-    name: 'Short-End Engine',
-    subtitle: 'Policy & Macro',
-    metrics: [
-      { name: 'Fed funds target', value: '3.75-4.00%', tag: 'D' },
-      { name: 'FedWatch Dec hike', value: '72%', tag: 'D' },
-      { name: 'SEP median 2026', value: '4.10%', tag: 'D' },
-      { name: 'FOMC vote (16 Sep)', value: '9-3 hold', tag: 'D' },
-      { name: 'Core PCE 3m SAAR', value: '3.6%', tag: 'D' },
-      { name: 'Services ex-housing 3m', value: '3.8%', tag: 'D' },
-      { name: 'NFP (Aug)', value: '+142k', tag: 'D' },
-      { name: 'NFP 3m avg', value: '+118k', tag: 'D' },
-      { name: 'Unemployment', value: '4.1%', tag: 'D' },
-      { name: 'Sahm rule', value: '0.43', tag: 'D' },
-      { name: '5y5y breakeven', value: '2.72%', tag: 'D' },
-      { name: '10y TIPS real', value: '2.42%', tag: 'D' },
-      { name: 'Real funds vs core PCE', value: '+0.28%', tag: 'E' },
-      { name: 'Holston-Laubach-Williams r*', value: '~0.95%', tag: 'D' },
-    ],
-    signal: 'BEARISH',
-    signalDetail: 'Yields higher, front-led',
-    confidence: 'HIGH',
-    narrative: 'Warsh has the dots and three dissents pushing the same way. The strip prices 72% for December, above SEP guidance, which is unusual - the market rarely out-hawks the committee. Core services ex-housing at 3.8% 3m SAAR is the number that keeps this alive. Labour is cooling without cracking: Sahm at 0.43 sits under the 0.50 trigger, and the 3m NFP average of 118k is a soft landing, not a stall. Here is the part that gets skipped: with the funds mid at 3.875% and core PCE at 3.6%, the REAL policy rate is +0.28%, against an HLW r* near 0.95%. On that arithmetic policy is not restrictive at all. The Fed is still removing accommodation; it has not yet arrived at restriction. That distinction governs the whole terminal-rate calculus, and nobody in the fiscal-doom camp is pricing it.',
-    steelman: 'The strip has out-hawked the committee before and been wrong every time since 2023. 72% priced for December is a crowded position, not a forecast, and the August PCE print on 26 Sep can vaporise it in a single session. Beyond that, the 3.8% services number is increasingly a shelter-and-insurance artefact rather than a wage story; if the Fed looks through it, the entire front-end repricing unwinds.',
-    flipsOn: 'August core PCE (26 Sep) printing at or below 0.20% m/m, which would drag the 3m SAAR toward 3.0% and cut the December probability below 50%.',
-  },
-  {
-    id: 'L2',
-    name: 'The Meat Grinder',
-    subtitle: 'Fiscal Supply & Term Premium',
-    metrics: [
-      { name: 'Deficit YTD FY26', value: '$1.92T', tag: 'D' },
-      { name: 'of which net interest', value: '$0.94T', tag: 'D' },
-      { name: 'Primary deficit', value: '$0.98T (3.1% GDP)', tag: 'E' },
-      { name: 'Net coupon issuance', value: '$128B/mo', tag: 'E' },
-      { name: 'Bill share of debt', value: '18.2%', tag: 'D' },
-      { name: 'TBAC bill guidance', value: '~20%', tag: 'D' },
-      { name: 'ACM term premium 10y', value: '+78bp', tag: 'D' },
-      { name: 'Kim-Wright TP 10y', value: '+65bp', tag: 'D' },
-      { name: 'Model disagreement', value: '13bp', tag: 'E' },
-      { name: '5y tail (18 Sep)', value: '+3.1bp', tag: 'D' },
-      { name: '10y tail (11 Sep)', value: '+2.4bp', tag: 'D' },
-      { name: '10y indirect (11 Sep)', value: '62.8% vs 65% avg', tag: 'D' },
-      { name: 'IG issuance YTD', value: '$1.12T', tag: 'D' },
-      { name: 'AI/hyperscaler YTD', value: '$184B', tag: 'E' },
-      { name: 'Buyback operations', value: '$18B/mo', tag: 'D' },
-    ],
-    signal: 'BEARISH',
-    signalDetail: 'Yields higher, long-led',
-    confidence: 'MED',
-    narrative: 'Treasury is pushing $128B a month of net coupon into a market whose natural duration buyers have gone quiet, and it is doing so with a bill share of 18.2% - below TBAC guidance, meaning the mix choice is actively adding duration rather than absorbing it. The 5y tailing 3.1bp with a 62.8% indirect on the 10y is the tell. But read the deficit properly before calling it doom. Of $1.92T, roughly $0.94T is net interest, which accrues to holders of capital and produces almost no consumption multiplier. The PRIMARY deficit is about 3.1% of GDP. A 3% primary deficit against nominal growth near 5% is not a debt spiral; it is a country with a large interest bill. Confidence is MED and deliberately so: the term premium models disagree by 13bp, which is a fifth of the entire repricing they are supposed to be measuring.',
-    steelman: 'The whole supply story may be a positioning story wearing a macro costume. Term premium is not observed - it is the residual of a model - and both ACM and Kim-Wright back it out of the same yield curve they are meant to explain, which makes the reasoning close to circular. Meanwhile CFTC shows leveraged funds at a record gross short. If the long end is cheap because everyone is already short it, then the marginal seller is exhausted and the pain trade is a rally. Note too that Treasury can defuse this at a press release: a bill-share shift to 22% removes roughly $40B a month of duration without a single policy change.',
-    flipsOn: 'Two consecutive coupon auctions stopping through the screws with indirects above 68%, or the 7 Nov QRA guiding bill share above 21%. Either says the buyer strike was a price, not a boycott.',
-  },
-  {
-    id: 'L3',
-    name: 'Shadow Plumbing',
-    subtitle: 'Liquidity & Balance Sheets',
-    metrics: [
-      { name: 'Reserves', value: '$3.28T', tag: 'D' },
-      { name: 'Reserves / GDP', value: '11.2%', tag: 'E' },
-      { name: 'Lowest Comfortable Level est.', value: '10.0-10.5% GDP', tag: 'E' },
-      { name: 'Headroom to LCLoR', value: '~$200B', tag: 'E' },
-      { name: 'TGA', value: '$782B', tag: 'D' },
-      { name: 'ON RRP', value: '$89B', tag: 'D' },
-      { name: 'SOFR - IORB', value: '-1.8bp', tag: 'D' },
-      { name: 'TGCR - IORB', value: '-3.2bp', tag: 'D' },
-      { name: 'SRF usage', value: '$0', tag: 'D' },
-      { name: 'SOFR 99th pct - median', value: '14bp', tag: 'D' },
-      { name: 'Leveraged fund basis', value: '$312B gross', tag: 'D' },
-      { name: 'Sponsored repo share', value: '38%', tag: 'D' },
-      { name: 'Dealer UST inventory', value: '$284B (>90th pct)', tag: 'D' },
-    ],
-    signal: 'NEUTRAL',
-    signalDetail: 'Functional; thin margin for error',
-    confidence: 'MED',
-    narrative: 'The plumbing works, which is not the same as the plumbing being safe. SOFR is still printing through IORB and the standing repo facility has taken zero, so on the headline measures there is no stress at all. The fragility is in the buffers, not the prints. ON RRP at $89B means the shock absorber that soaked up $2.5T in 2022 is effectively gone; the next drain comes straight out of reserves. At 11.2% of GDP, reserves sit perhaps $200B above most estimates of the lowest comfortable level - that is about eight weeks of runoff plus one bad tax date. Watch the 99th-percentile-to-median SOFR spread at 14bp rather than the median itself: distributions widen before medians move, and in September 2019 the tails were screaming for two weeks while the average looked immaculate. The $312B basis position is the accelerant, not the spark.',
-    steelman: 'Every ingredient of this warning was in place a year ago and nothing broke, because the Fed now has tools it did not have in 2019. The SRF is standing, counterparties are pre-positioned, central clearing is phasing in and is genuinely balance-sheet-efficient. Repo stress in 2026 is a one-day print and a policy response, not a crisis. Assuming otherwise is fighting the last war with the last war\'s toolkit.',
-    flipsOn: 'SOFR-IORB printing above +5bp on a non-quarter-end day, or any non-zero SRF take-up outside a settlement date. Either means the buffer is actually binding rather than theoretically thin.',
-  },
-  {
-    id: 'L4',
-    name: 'Cross-Border Flows',
-    subtitle: 'International Capital',
-    metrics: [
-      { name: 'Foreign official custody', value: '$3.58T', tag: 'D' },
-      { name: 'Japan holdings', value: '$1.04T', tag: 'D' },
-      { name: 'China holdings', value: '$748B', tag: 'D' },
-      { name: 'JGB 10y', value: '1.28%', tag: 'D' },
-      { name: 'JGB 30y', value: '2.64%', tag: 'D' },
-      { name: 'UST 10y hedged into JPY', value: '5.82%', tag: 'E' },
-      { name: 'UST 10y hedged into EUR', value: '4.18%', tag: 'E' },
-      { name: 'JPY 3m implied vol', value: '11.2%', tag: 'D' },
-      { name: 'Unhedged pickup vs JGB', value: '386bp', tag: 'E' },
-    ],
-    signal: 'BEARISH',
-    signalDetail: 'Marginal buyer is domestic and price-sensitive',
-    confidence: 'LOW',
-    narrative: 'The hedged carry for a Japanese lifer is 5.82% against a 1.28% JGB, which sounds like free money until you notice the 30y JGB at 2.64% offers the same duration with no currency basis, no hedge roll and no board-level conversation about FX losses. Domestic Japanese duration has become a genuine substitute for the first time in twenty years, and that is the structural change that matters more than any month of TIC data. China at $748B continues its slow, political walk lower. The marginal buyer of the long end is now a domestic US real-money account that has to be paid to show up. Confidence is LOW and should be: TIC runs a six-week lag, custody data conflates custody with ownership, and the hedged-yield figure is an estimate built on a cross-currency basis that moves 15bp in a week.',
-    steelman: 'Foreign private demand is not the same as foreign official demand, and the private bid has been absorbing what officials leave behind for three years running. At a 5.82% hedged yield the UST is not competing with the JGB, it is competing with Japanese credit and equities, and on that comparison it wins. Meanwhile "foreigners are selling" has been an evergreen bear thesis since 2013 and has never once been the thing that moved the 10y 50bp.',
-    flipsOn: 'The BoJ hiking to 1.25% or the 30y JGB clearing 3.00%. That makes domestic Japanese duration decisively better than hedged USTs and turns a slow rotation into a scheduled one.',
-  },
-  {
-    id: 'L5',
-    name: 'Convexity & MBS',
-    subtitle: 'Mortgage Market Dynamics',
-    metrics: [
-      { name: '30y fixed (PMMS)', value: '7.22%', tag: 'D' },
-      { name: 'Primary-secondary spread', value: '268bp', tag: 'D' },
-      { name: 'MBS OAS (5.5s)', value: '+148bp', tag: 'D' },
-      { name: 'Index duration (MBS)', value: '5.8y', tag: 'E' },
-      { name: 'Extension per +50bp', value: '+0.4y', tag: 'E' },
-      { name: 'Convexity-hedge need', value: '~$18B 10y equiv / 50bp', tag: 'E' },
-      { name: 'CPR (current)', value: '4.2%', tag: 'D' },
-      { name: 'WAC outstanding', value: '3.82%', tag: 'D' },
-      { name: 'Refi-incentive share', value: '<2% of pool', tag: 'E' },
-      { name: 'Bank AFS unrealised', value: '-$412B', tag: 'D' },
-      { name: 'Bank HTM unrealised', value: '-$612B', tag: 'E' },
-    ],
-    signal: 'BEARISH',
-    signalDetail: 'Amplifier, not initiator',
-    confidence: 'MED',
-    narrative: 'The mortgage universe is a 3.82% coupon stack staring at a 7.22% market rate, so nothing prepays for any reason other than death, divorce or relocation - CPR 4.2% is pure turnover. The consequence is a portfolio that lengthens exactly when its owners least want it to: another 50bp of selloff adds about 0.4 years of index duration and forces roughly $18B 10y-equivalent of convexity selling from servicers and REITs. That is not the cause of a move. It is what turns a 15bp move into a 25bp move at 3pm on a Thursday. Note carefully who does NOT hedge: the Fed, and banks holding in HTM. A larger share of the mortgage stack sits in non-hedging hands than in 2013, which mutes the classic convexity vortex relative to the taper tantrum.',
-    steelman: 'Negative convexity cuts both ways and the market has stopped pricing the other direction. This stack has essentially no prepayment risk left - it cannot extend much further because it is already fully extended, and the first serious rally has no refi wave to meet it because the primary-secondary spread at 268bp means originators will bank 100bp before passing any on. That makes current-coupon MBS one of the better convexity-adjusted assets available, not a hazard.',
-    flipsOn: 'The primary-secondary spread compressing below 200bp, which would put 6.5% mortgages within reach on an unchanged 10y and wake up refi for the first time since 2021.',
-  },
-  {
-    id: 'L6',
-    name: 'Credit & Risk Assets',
-    subtitle: 'Spread Markets',
-    metrics: [
-      { name: 'IG OAS', value: '+108bp', tag: 'D' },
-      { name: 'HY OAS', value: '+342bp', tag: 'D' },
-      { name: 'CCC OAS', value: '+782bp', tag: 'D' },
-      { name: 'CCC minus BB', value: '+540bp', tag: 'D' },
-      { name: 'IG all-in yield', value: '5.62%', tag: 'D' },
-      { name: 'HY all-in yield', value: '8.48%', tag: 'D' },
-      { name: 'Leveraged loan spread', value: '+425bp', tag: 'D' },
-      { name: '2027 HY maturity wall', value: '$284B', tag: 'D' },
-      { name: 'HY interest coverage', value: '2.8x', tag: 'E' },
-      { name: 'Coverage at refi rates', value: '2.1x', tag: 'E' },
-      { name: 'Private credit AUM', value: '~$1.2T', tag: 'E' },
-      { name: 'PIK share of BDC income', value: '9.4%', tag: 'D' },
-      { name: 'MOVE', value: '118', tag: 'D' },
-      { name: 'VIX', value: '19.4', tag: 'D' },
-      { name: 'S&P earnings yield - 10y', value: '-0.8%', tag: 'E' },
-    ],
-    signal: 'NEUTRAL',
-    signalDetail: 'Dispersing beneath a calm index',
-    confidence: 'MED',
-    narrative: 'The index says nothing is wrong. HY at 342bp is 45bp off the August tights and comfortably inside the 400bp line where people start using the word stress. Look underneath and the story is different: CCC-BB at 540bp is the widest since 2023, which is the market sorting survivors from casualties rather than repricing the asset class. That is what the late innings look like - dispersion first, index second. The 2027 wall of $284B refinances at 8.48% against coupons struck near 5.5%, taking coverage from 2.8x to roughly 2.1x, which is survivable for BB and terminal for the bottom decile. The PIK share of BDC income at 9.4% is the same tell in private clothing: income booked, cash not received. The equity risk premium at -0.8% means equities carry no cushion for any of this.',
-    steelman: 'All-in yield is what actually clears credit, and 8.48% brings in pension and insurance money that does not care about spread at all. Supply-driven widening with a full order book is not deterioration. The maturity wall has been refinanced early in every one of the last four cycles because issuers act eighteen months ahead, and the 2027 number has already shrunk 20% this year. Dispersion without index widening can equally mean the market is working properly.',
-    flipsOn: 'HY OAS above 400bp with IG above 130bp in the same fortnight. Index-level confirmation is what turns dispersion into a cycle.',
-  },
-];
+/**
+ * Build the diagnostic spine against the live snapshot.
+ *
+ * Signals and prose are judgement and are written here. Every number inside
+ * them is interpolated from the snapshot, so a narrative sentence that quotes
+ * a level cannot drift away from the level it quotes.
+ */
+export function buildLayers(s: Snapshot): Layer[] {
+  const n = (k: string, dp = 2, suffix = '') => fmt(val(s, k), dp, suffix);
+  const reservesPctGdp = (val(s, 'reserves')! / val(s, 'nominalGdp')!) * 100;
+  const indirect = avgIndirect(s);
+  const netIntPctGdp = (val(s, 'netInterestAnnual')! / val(s, 'nominalGdp')!) * 100;
+  const debtPctGdp = (val(s, 'debtHeldByPublic')! / val(s, 'nominalGdp')!) * 100;
+  const ccRatio = val(s, 'cccOas')! / val(s, 'bbOas')!;
 
-export { type PathRow, type Scenario, type TradeExpression };
+  return [
+    {
+      id: 'L1',
+      name: 'Short-End Engine',
+      subtitle: 'Policy & Macro',
+      metrics: [
+        metric(s, 'effr', 'Effective fed funds'),
+        metric(s, 'iorb', 'IORB'),
+        metric(s, 'corePceYoY', 'Core PCE y/y'),
+        metric(s, 'corePce3mSaar', 'Core PCE 3m SAAR'),
+        metric(s, 'realPolicyRate', 'Real policy rate'),
+        metric(s, 'nfpChange', 'Last payroll print'),
+        metric(s, 'nfp3mAvg', 'Payrolls 3m avg'),
+        metric(s, 'unemployment', 'Unemployment'),
+        metric(s, 'sahm', 'Sahm indicator'),
+        metric(s, 'claims4wk', 'Claims 4wk avg'),
+        metric(s, 'bei5y5y', '5y5y breakeven'),
+        metric(s, 'tips10y', '10y TIPS real'),
+      ],
+      signal: 'NEUTRAL',
+      signalDetail: 'Cross-currents; labour is the live risk',
+      confidence: 'MED',
+      narrative: `Start with the distinction almost nobody states plainly. The real policy rate - effective funds less core PCE - is ${n('realPolicyRate')}%. Against an r* estimate near 1%, that is not restrictive. It is barely neutral. The Fed has spent two years REMOVING ACCOMMODATION and has not clearly arrived at RESTRICTION, and those are different operations with different endpoints. Now the part that has changed the balance of this framework: the payroll three-month average is running at ${n('nfp3mAvg', 0)}k. The headline print of ${n('nfpChange', 0)}k looks fine in isolation and the trend underneath it does not. A labour market decelerating from a low base has far less room than one decelerating from a high one, and the Sahm indicator at ${n('sahm')} has not caught it because Sahm measures the unemployment rate, which is the last thing to move. Meanwhile core PCE at ${n('corePceYoY')}% y/y is decelerating on the three-month at ${n('corePce3mSaar')}%, and the 5y5y breakeven at ${n('bei5y5y')}% says the market does not believe inflation is the problem. That combination - soft labour, cooling inflation, anchored expectations, a policy rate barely above neutral - is not a hawkish setup. It is a Fed with more room to ease than its own rhetoric suggests.`,
+      steelman: `The three-month payroll average is the most revision-prone number in macro and has been revised up repeatedly in this cycle; claims at ${n('claims4wk', 0)}k are nowhere near recessionary, and an unemployment rate of ${n('unemployment')}% with a negative Sahm reading is a labour market that is normalising rather than breaking. On the other side, core PCE is still above 3% y/y and has been for years. A committee that eases on the basis of a soft payroll average while core inflation has a 3-handle is a committee that has quietly changed its target, and the long end will price exactly that.`,
+      flipsOn: 'Two consecutive payroll prints below zero flips this to outright BULLISH for duration. Core PCE 3m annualised re-accelerating back above 3.5% flips it BEARISH.',
+    },
+    {
+      id: 'L2',
+      name: 'The Meat Grinder',
+      subtitle: 'Fiscal Supply & Term Premium',
+      metrics: [
+        metric(s, 'kimWright10y', 'Kim-Wright 10y TP'),
+        manualMetric('ACM 10y TP', `+${MANUAL_VALUES.acm10y.value}bp`),
+        metric(s, 'debtHeldByPublic', 'Debt held by public'),
+        { name: 'Debt / GDP', value: `${debtPctGdp.toFixed(0)}%`, tag: 'E' },
+        metric(s, 'netInterestAnnual', 'Net interest (SAAR)'),
+        { name: 'Net interest / GDP', value: `${netIntPctGdp.toFixed(1)}%`, tag: 'E' },
+        metric(s, 'effectiveDebtRate', 'Effective rate on stock'),
+        metric(s, 'nominalGrowthYoY', 'Nominal GDP growth'),
+        { name: 'Avg indirect share, recent coupons', value: indirect ? `${indirect.toFixed(1)}%` : 'n/a', tag: 'D' },
+        manualMetric('Last 5y auction tail', `+${MANUAL_VALUES.lastAuctionTail.value}bp`),
+      ],
+      signal: 'BEARISH',
+      signalDetail: 'Term premium high and structurally supported',
+      confidence: 'MED',
+      narrative: `The term premium is genuinely elevated: Kim-Wright has the 10y at ${n('kimWright10y', 0)}bp, which is well above where it sat through the entire post-crisis period and is the strongest single argument for the fiscal story. But read the fiscal position properly before calling it doom. Debt held by the public is ${debtPctGdp.toFixed(0)}% of GDP and net interest runs at ${netIntPctGdp.toFixed(1)}% of GDP - a large bill, and one that accrues almost entirely to holders of financial assets rather than to consumption. The number that actually decides sustainability is neither of those: it is the effective rate on the stock, ${n('effectiveDebtRate')}%, against nominal growth of ${n('nominalGrowthYoY')}%. While growth exceeds the coupon the stock deflates itself, and it currently does so by a wide margin. Confidence is MED and deliberately so: the two term premium models disagree, Kim-Wright at ${n('kimWright10y', 0)}bp against a manually-entered ACM at ${MANUAL_VALUES.acm10y.value}bp, and term premium is not an observation at all - it is a residual backed out of the same curve it claims to explain.`,
+      steelman: `The whole supply story may be a positioning story in a macro costume. Term premium is a model residual, and a high one tells you the model cannot explain the long end, not that fiscal policy is the reason. Note also what the auctions actually show: indirect participation across recent coupons is averaging ${indirect ? indirect.toFixed(1) : 'n/a'}%, which is not the signature of a buyer strike. And the decisive point is arithmetic rather than rhetorical - with the effective rate at ${n('effectiveDebtRate')}% against ${n('nominalGrowthYoY')}% nominal growth, the snowball term is firmly negative. The fiscal path is not what is wrong with the long end today.`,
+      flipsOn: 'Kim-Wright breaking above 130bp, or nominal growth falling below the effective rate on the stock. The second is the one that matters and it belongs to Scenario C, not B.',
+    },
+    {
+      id: 'L3',
+      name: 'Shadow Plumbing',
+      subtitle: 'Liquidity & Balance Sheets',
+      metrics: [
+        metric(s, 'reserves', 'Reserve balances'),
+        { name: 'Reserves / GDP', value: `${reservesPctGdp.toFixed(1)}%`, tag: 'E' },
+        metric(s, 'onRrp', 'ON RRP take-up'),
+        metric(s, 'tgaDaily', 'TGA (daily)'),
+        metric(s, 'sofr', 'SOFR'),
+        metric(s, 'sofrMinusIorb', 'SOFR less IORB'),
+        metric(s, 'sofrTailWidth', 'SOFR 99th pct less median'),
+        metric(s, 'tgcr', 'TGCR'),
+        metric(s, 'sofrVolume', 'SOFR volume'),
+        manualMetric('10y swap spread', `${MANUAL_VALUES.swapSpread10y.value}bp`),
+      ],
+      signal: 'NEUTRAL',
+      signalDetail: 'Prints calm, buffers effectively exhausted',
+      confidence: 'MED',
+      narrative: `Every price in this layer says nothing is wrong. SOFR is printing ${n('sofrMinusIorb', 0)}bp through IORB and the 99th-percentile tail is only ${n('sofrTailWidth', 0)}bp above the median, which is an orderly distribution. The fragility is not in the prints, it is in what is left underneath them. ON RRP take-up is ${fmt(val(s, 'onRrp'), 2)}bn. Not billions - a fraction of one. The facility that absorbed two and a half trillion dollars of surplus liquidity in 2022 is empty, which means the shock absorber between quantitative tightening and bank reserves no longer exists; the next drain comes straight out of reserves. And reserves are at ${n('reserves')}tn, or ${reservesPctGdp.toFixed(1)}% of GDP. Most published estimates of the lowest comfortable level of reserves sit around 10-11% of GDP. On that arithmetic the buffer is not thin, it is already at or through the bottom of the comfortable range, with a TGA of ${fmt(val(s, 'tgaDaily'), 0)}bn sitting above it waiting to be spent or rebuilt. Watch the tail of the SOFR distribution rather than its median: in September 2019 the tails screamed for a fortnight while the average looked immaculate.`,
+      steelman: `Every ingredient of this warning has been in place for a year and nothing has broken, because the Fed now has tools it did not have in 2019. The standing repo facility exists, is pre-positioned, and caps the repo rate by construction. "Lowest comfortable level of reserves" is an estimate with error bars measured in hundreds of billions, and the demand for reserves falls as the SRF becomes a credible substitute for precautionary balances - which is precisely what it was built to do. A calm SOFR distribution with reserves at this level may simply be evidence that the comfortable level is lower than the estimates say.`,
+      flipsOn: 'SOFR printing above IORB on a non-quarter-end day, or any standing repo take-up outside a settlement date. Either means the buffer is binding rather than theoretically thin.',
+    },
+    {
+      id: 'L4',
+      name: 'Cross-Border Flows',
+      subtitle: 'International Capital',
+      metrics: [
+        metric(s, 'usdjpy', 'USD/JPY'),
+        metric(s, 'y10', 'UST 10y'),
+        manualMetric('JGB 10y', 'verify', 'I'),
+        manualMetric('Foreign official holdings (TIC)', 'verify', 'I'),
+        manualMetric('UST 10y hedged into JPY', 'verify', 'I'),
+      ],
+      signal: 'NEUTRAL',
+      signalDetail: 'Insufficient live data to take a view',
+      confidence: 'LOW',
+      narrative: `This layer is deliberately the weakest in the framework, and it is now honest about it. The automatable content is USD/JPY at ${n('usdjpy')} and nothing else. TIC holdings publish with a six-week lag in fixed-width text; JGB yields, cross-currency basis and therefore hedged Treasury yields all require feeds this pipeline does not have. In v3.0 this layer carried a confident BEARISH signal supported entirely by numbers that no source had published. The correct reading is that the marginal-buyer question is real and important and we cannot currently measure it, so the signal is NEUTRAL with LOW confidence, and the metrics above say "verify" rather than inventing a figure. A layer with no data should look like a layer with no data.`,
+      steelman: `The counter to the whole layer, independent of data: "foreigners are selling" has been an evergreen bear thesis since 2013 and has never once been the thing that moved the 10y fifty basis points. Foreign private demand has absorbed official runoff for years, and the framing "there is no buyer" is incoherent in any case - every bond that exists is owned by somebody at every moment. The question is never whether there is a buyer, only at what yield, and that is a question about the whole curve rather than about foreigners.`,
+      flipsOn: 'Wiring a JGB and cross-currency basis feed into the pipeline, which would make this layer measurable. Until then no observation can flip a signal that rests on nothing.',
+    },
+    {
+      id: 'L5',
+      name: 'Convexity & MBS',
+      subtitle: 'Mortgage Market Dynamics',
+      metrics: [
+        metric(s, 'mortgage30y', '30y fixed (PMMS)'),
+        metric(s, 'y10', '10y Treasury'),
+        { name: 'Primary-secondary proxy', value: `${Math.round((val(s, 'mortgage30y')! - val(s, 'y10')!) * 100)}bp`, tag: 'E' },
+        manualMetric('MBS current-coupon OAS', `+${MANUAL_VALUES.mbsOas.value}bp`),
+        manualMetric('Index duration', 'verify', 'I'),
+        manualMetric('CPR', 'verify', 'I'),
+      ],
+      signal: 'BEARISH',
+      signalDetail: 'Amplifier, not initiator',
+      confidence: 'LOW',
+      narrative: `The mortgage rate is ${n('mortgage30y')}% against a 10y of ${n('y10')}%, a gross spread of roughly ${Math.round((val(s, 'mortgage30y')! - val(s, 'y10')!) * 100)}bp. That spread is the whole story of this layer: it is wide by historical standards, and it means the mortgage market does not transmit a Treasury rally to borrowers on anything like a one-for-one basis. The outstanding stack carries a weighted-average coupon far below the current rate, so nothing prepays for any reason except death, divorce or relocation, and the portfolio lengthens exactly when its owners least want it to. That is not the cause of a move. It is what turns a 15bp move into a 25bp move on a Thursday afternoon. Confidence is LOW rather than MED because the numbers that would quantify it - current-coupon OAS, index duration, prepayment speeds - are all vendor-supplied and none of them is in this pipeline.`,
+      steelman: `Negative convexity cuts both ways and the market has stopped pricing the other direction. This stack is already fully extended and cannot extend much further, and the first serious rally meets no refinancing wave because a primary-secondary spread this wide means originators bank the first hundred basis points before passing any on. That makes current-coupon mortgages one of the better convexity-adjusted assets available rather than a hazard.`,
+      flipsOn: 'The primary-secondary spread compressing materially, which would put refinancing within reach on an unchanged 10y and wake up prepayment speeds for the first time in years.',
+    },
+    {
+      id: 'L6',
+      name: 'Credit & Risk Assets',
+      subtitle: 'Spread Markets',
+      metrics: [
+        metric(s, 'igOas', 'IG OAS'),
+        metric(s, 'hyOas', 'HY OAS'),
+        metric(s, 'bbOas', 'BB OAS'),
+        metric(s, 'cccOas', 'CCC OAS'),
+        metric(s, 'cccMinusBb', 'CCC less BB'),
+        { name: 'CCC / BB ratio', value: `${ccRatio.toFixed(1)}x`, tag: 'E' },
+        metric(s, 'igYield', 'IG all-in yield'),
+        metric(s, 'hyYield', 'HY all-in yield'),
+        metric(s, 'vix', 'VIX'),
+        manualMetric('MOVE', String(MANUAL_VALUES.move.value)),
+      ],
+      signal: 'NEUTRAL',
+      signalDetail: 'Index at the tights, dispersion screaming',
+      confidence: 'HIGH',
+      narrative: `This is the most interesting layer on the board and the live data makes it far sharper than any hand-written version. At the index level nothing is wrong and arguably nothing has ever been better: IG at ${n('igOas', 0)}bp and HY at ${n('hyOas', 0)}bp are close to cycle tights, and VIX at ${n('vix')} is low. Now look underneath. BB sits at ${n('bbOas', 0)}bp while CCC sits at ${n('cccOas', 0)}bp - a gap of ${n('cccMinusBb', 0)}bp and a ratio of ${ccRatio.toFixed(1)}x. That is not a market that is calm. It is a market that has sorted itself into survivors and casualties and is pricing the two as different asset classes. Index-level calm plus extreme quality dispersion is the classic late-cycle signature: the average tells you nothing because the average is being held up by the half of the market that is fine. The practical consequence is that HY at ${n('hyOas', 0)}bp offers almost no cushion for the labour-market deterioration visible in L1, which is precisely why Scenario C carries more weight in this run than the last.`,
+      steelman: `Dispersion without index widening can equally mean the market is working properly - discriminating between credits rather than repricing the asset class, which is what a healthy market is supposed to do. All-in yield is what actually clears credit, and IG at ${n('igYield')}% and HY at ${n('hyYield')}% bring in pension and insurance money that does not care about spread at all. And a wide CCC bucket in a market where the CCC cohort is smaller and lower quality than it used to be is partly a composition effect rather than a signal.`,
+      flipsOn: 'BB widening past 200bp. That is the tell that says dispersion has become contagion - the CCC bucket can widen indefinitely without meaning much, but BB is where the index actually lives.',
+    },
+  ];
+}

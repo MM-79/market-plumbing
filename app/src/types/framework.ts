@@ -44,23 +44,32 @@ export interface CurvePoint {
 }
 
 /**
- * One row of a scenario path. Every field is REQUIRED and numeric.
+ * Scenario keys. 'D' was added in v3.0: the framework offered only grind, doom
+ * and recession, so the distribution had no branch in which yields fall for a
+ * good reason. Widening this union forced every downstream consumer - trade
+ * mappings, the scorecard, the institution lens - to say something about that
+ * branch rather than silently omit it.
+ */
+export type ScenarioKey = 'A' | 'B' | 'C' | 'D';
+
+/**
+ * One row of a scenario path, MATERIALISED against the live anchor.
  *
- * v1 stored these as strings ('4.75') which made them uncheckable — you cannot
- * assert that 2s10s equals 10y minus 2y on a string. Spreads are deliberately
- * ABSENT from this type: they are derived in curve.ts, never authored, so they
- * can never disagree with the yields they are supposedly computed from.
+ * This is now an output type, not an input type. Nobody writes one of these by
+ * hand; `materialisePath()` builds them from the live curve plus a PathDelta.
+ * Spreads are still deliberately absent - they are derived at render time by
+ * `spreads()`, so a spread can never disagree with the yields it comes from.
  */
 export interface PathRow {
-  label: string;           // 'Today' | 'Month 1' | 'Month 3' | 'Month 6'
+  label: string;
   monthsAhead: 0 | 1 | 3 | 6;
   fedFundsLow: number;
   fedFundsHigh: number;
   y2: number;
-  y5: number;              // v1 quoted 5s30s with no 5y anywhere in the table
+  y5: number;
   y10: number;
   y30: number;
-  acmTermPremium: number;  // bp
+  termPremium: number;     // bp
   swapSpread10y: number;   // bp, negative = swaps through Treasuries
   sofrMinusIorb: number;   // bp
   mortgage30y: number;     // percent
@@ -70,13 +79,37 @@ export interface PathRow {
 }
 
 /**
- * Scenario keys. 'D' was added in v3: v1 offered only grind, doom and
- * recession, so the distribution had no branch in which yields fall for a good
- * reason. Widening this union is what forced every downstream consumer - trade
- * mappings, the scorecard, the institution lens - to say something about that
- * branch rather than silently omit it.
+ * What an analyst actually writes: a view about CHANGE, expressed in basis
+ * points from wherever the market happens to be today.
+ *
+ * This is the second-order version of the same lesson that removed spreads from
+ * PathRow. v3.0 stored absolute levels, which meant every scenario silently
+ * decayed the moment the market moved - the paths had been drawn against a 5.14
+ * 10y and the tape was at 4.96, so all four scenarios were describing a world
+ * that no longer existed. Storing deltas makes the paths REBASE THEMSELVES on
+ * every data refresh.
+ *
+ * Two fields stay absolute on purpose. `fedFunds*` is a view about a policy
+ * level, not a drift from today's level. `move` is absolute because the MOVE
+ * index has no free feed, so there is no live base to apply a delta to.
  */
-export type ScenarioKey = 'A' | 'B' | 'C' | 'D';
+export interface PathDelta {
+  label: string;
+  monthsAhead: 0 | 1 | 3 | 6;
+  fedFundsLow: number;
+  fedFundsHigh: number;
+  dy2: number;             // bp from today
+  dy5: number;
+  dy10: number;
+  dy30: number;
+  dTermPremium: number;    // bp
+  dSwapSpread: number;     // bp
+  dSofrIorb: number;       // bp
+  dMortgage: number;       // bp
+  dIgOas: number;          // bp
+  dHyOas: number;          // bp
+  move: number;            // absolute index level
+}
 
 export interface Scenario {
   key: ScenarioKey;
@@ -87,7 +120,7 @@ export interface Scenario {
   definition: string;
   triggers: string[];
   signposts: string[];
-  path: PathRow[];
+  path: PathDelta[];
   curveShape: string;
   analog: { episode: string; why: string; biggerOrSmaller: string };
   invalidation: string;

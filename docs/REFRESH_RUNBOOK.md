@@ -1,168 +1,167 @@
 # Refresh Runbook
 
-Nothing in this framework updates itself. This is the ordered list of pulls that
-makes the snapshot true again. Budget 45–60 minutes for a full refresh.
-
-**Run order matters.** The curve anchor comes first because every derived number
-on screen is a function of it, and the audit will fail loudly until the scenario
-`Today` rows match it.
+The data refreshes itself. This document covers the two things that do not:
+the seven fields with no free feed, and the reasoning.
 
 ---
 
-## Before you start
+## What is automated
 
 ```bash
-git -C . checkout -b refresh/YYYY-MM-DD
+npm run refresh --prefix app      # writes app/public/data/snapshot.json
 ```
 
-Set `runSettings.priorRunDate` to the **current** `asOfDate` before changing
-`asOfDate` to today. The "what changed" table and the `priorProbability` fields
-are the only record this framework keeps of its own history — losing them loses
-the track record.
+Runs unattended on weekday evenings via `.github/workflows/refresh.yml`, and
+commits only if something moved. **51 series and the last 14 coupon auctions**,
+from four keyless public endpoints.
+
+| Group | Series |
+|---|---|
+| Curve | 3m, 2y, 5y, 10y, 30y par yields |
+| Real & inflation | 5y/10y TIPS, 10y breakeven, 5y5y forward breakeven |
+| Policy | Effective fed funds, IORB, real policy rate (derived) |
+| Term premium | Kim-Wright 10y |
+| Plumbing | Reserves, TGA (weekly and daily), ON RRP, SOFR + 1st/99th percentiles, TGCR, BGCR, SOFR−IORB and tail width (derived) |
+| Credit | IG, HY, BB, CCC OAS; IG and HY effective yields; CCC−BB (derived) |
+| Mortgage | Freddie PMMS 30y fixed |
+| Vol | VIX |
+| Macro | Core PCE index → y/y and 3m SAAR (derived); core CPI; payrolls → monthly change and 3m average (derived); unemployment; Sahm; claims 4wk |
+| Energy | WTI |
+| Fiscal | Debt held by the public, nominal GDP → growth (derived), net interest → effective rate on the stock (derived) |
+| Cross-border | USD/JPY |
+| Auctions | High yield, bid-to-cover, indirect/direct/dealer split, size |
+
+The fetcher **aborts without writing** if the curve is missing or if more than
+40% of sources fail. Keeping yesterday's snapshot and flagging its age beats
+publishing an empty anchor.
+
+### Adding a series
+
+One entry in `app/scripts/sources.mjs`:
+
+```js
+{ key: 'myKey', id: 'FRED_ID', unit: 'bp', scale: 100,
+  fromUnit: 'percent', toUnit: 'bp', staleAfterDays: 4, label: 'What it is' }
+```
+
+`scale` converts the published unit into the framework's. **Getting that wrong
+is the most likely failure mode of the whole pipeline**, which is why every
+converted series states the unit it converts *from*. ICE BofA publishes OAS in
+percent and we quote basis points; WRESBAL publishes millions and we quote
+trillions.
+
+### Staleness limits
+
+Daily market data gets 4 days (covers a long weekend), weekly gets 10.
+
+Monthly and quarterly series need care, and getting this wrong is why a naive
+pipeline reports half its own data as permanently stale. **FRED dates a periodic
+observation to the START of the period it describes.** July core PCE, published
+in late August, carries `asOf: 2026-07-01` and is already ~55 days old the day
+it lands. Those series carry `periodDated: true` and thresholds that cover
+period length + publication lag: 70–75 days monthly, 220 quarterly.
 
 ---
 
-## Step 1 — The anchor (blocking; everything depends on it)
+## What is NOT automated: the seven manual fields
 
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 1 | 2y, 5y, 10y, 30y par yields | [Treasury par yield curve](https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve) | `parCurve`, `anchor`, `observations.y2/y5/y10/y30` |
+Listed on the Data Feed tab with the reason and the source. Each is a place
+where hand-typed drift can re-enter, which is exactly why they are displayed
+rather than buried.
 
-Then update the `Today` row of **all four** scenario paths in
-`app/src/data/scenarios.ts` (the shared `TODAY` constant). The audit's
-`path-t0-*` checks fail until these match to 0.5bp — that failure is the
-guardrail, do not work around it.
+| Field | Why | Where |
+|---|---|---|
+| ACM 10y term premium | NY Fed publishes it as XLS, no machine-readable feed | [NY Fed term premia](https://www.newyorkfed.org/research/data_indicators/term-premia-tabs) |
+| MOVE index | Proprietary to ICE, no free API | [ICE indices](https://indices.theice.com/) |
+| 10y SOFR swap spread | Needs a swap curve feed | OFR monitor or a dealer run |
+| Agency MBS current-coupon OAS | Model-dependent, vendor-supplied | Dealer run |
+| Coupon auction tails | Needs the when-issued yield at the bid deadline, which TreasuryDirect does not publish | Dealer run or Bloomberg |
+| CFTC leveraged-fund positioning | Feed exists; aggregating across the five UST contracts is judgement-heavy and not yet validated | [CFTC Socrata](https://publicreporting.cftc.gov/resource/gpe5-46if.json) |
+| TIC foreign holdings | Six-week lag, fixed-width text | [TIC](https://home.treasury.gov/data/treasury-international-capital-tic-system) |
 
----
+They live in `MANUAL_VALUES` in `app/src/data/marketData.ts`, each with the date
+it was last entered.
 
-## Step 2 — Policy and the path
-
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 2 | Fed funds target, last decision, vote split, dissents | [FOMC calendar](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm) | L1 metrics, `observations.fedFundsMid` |
-| 3 | SEP median dots (quarterly only) | Same | L1 metrics |
-| 4 | Next-meeting and December probabilities | [CME FedWatch](https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html) | L1 metrics |
-| 5 | ACM 10y term premium | [NY Fed ACM](https://www.newyorkfed.org/research/data_indicators/term-premia-tabs) | `observations.acm10y`, L2, attribution |
-| 6 | Kim-Wright 10y term premium | [FRED THREEFYTP10](https://fred.stlouisfed.org/series/THREEFYTP10) | L2 metrics, model-disagreement line |
-| 7 | 10y TIPS real yield, 5y5y breakeven | [FRED DFII10](https://fred.stlouisfed.org/series/DFII10), [T5YIFR](https://fred.stlouisfed.org/series/T5YIFR) | `observations.tips10y`, `bei5y5y` |
-
-> Update the **model-disagreement** figure (ACM minus Kim-Wright) whenever
-> either moves. It appears in three places and is load-bearing for the L2
-> confidence rating.
+> Keeping ACM manual while Kim-Wright is automated is a feature, not an
+> oversight. The disagreement between the two models is load-bearing for L2, and
+> automating only one keeps the comparison visible instead of letting a single
+> model quietly become "the" term premium.
 
 ---
 
-## Step 3 — Macro
+## What is NOT automated: the reasoning
 
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 8 | Core PCE m/m, y/y, 3m SAAR | [BEA](https://www.bea.gov/data/personal-consumption-expenditures-price-index) | `observations.corePce3m`, L1 |
-| 9 | Core CPI, services ex-housing | [BLS](https://www.bls.gov/news.release/) | L1 metrics |
-| 10 | Payrolls, 3m average, unemployment, Sahm | [BLS](https://www.bls.gov/news.release/) / [FRED SAHMREALTIME](https://fred.stlouisfed.org/series/SAHMREALTIME) | `observations.nfp`, `unemployment`, L1 |
-| 11 | WTI / Brent | [EIA](https://www.eia.gov/petroleum/) | `observations.wti`, L6, exotic chain 1 |
+This is the part that matters, and the part an auto-refreshing framework is
+most likely to let rot. The self-check tracks it: **warn at 10 days, fail at
+45**, comparing `narrativeReviewedOn` against the data date.
 
-**Recompute the real policy rate** (funds mid minus core PCE 3m SAAR) and the
-gap to r\*. This drives the single most important distinction in L1 and it is
-quoted in four places.
+### The review, in order
 
----
+**1. Re-read every layer steelman.** If a steelman has become the base case,
+the signal should have flipped. Steelmen that never win are decoration.
 
-## Step 4 — Supply
+**2. Check the flips-on conditions.** Each layer names one observable that would
+change its signal. Any that fired must be honoured, or the framework is not
+updating on evidence.
 
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 12 | Last 4–6 coupon auctions: tail vs WI, bid-to-cover, indirect/direct/dealer | [TreasuryDirect results](https://www.treasurydirect.gov/auctions/announcements-data-results/) | L2 metrics, scorecard `current` |
-| 13 | Latest QRA: coupon sizes, bill share, guidance | [Quarterly refunding](https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding) | L2, Scenario B invalidation |
-| 14 | Buyback operation sizes | Same | L2, toolkit rung 2 |
-| 15 | Deficit YTD **split into primary and net interest** | [Monthly Treasury Statement](https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/) | `FISCAL_INPUTS`, `flowChannels` |
-| 16 | IG issuance YTD, AI/hyperscaler share | SIFMA / dealer runs | L2, cross-asset chain 1 |
+**3. Move the probabilities — and set `priorProbability` first.** Apply the
+scorecard rules mechanically to what actually printed, then adjust for
+judgement, then write down which of the two you did. If nothing moved, the
+audit raises a WARN and you owe the reader a sentence explaining why.
 
-> Step 15 is the one most likely to be skipped and it is the most valuable pull
-> in the runbook. The MTS publishes interest outlays separately. Almost nobody
-> splits them, and the split is what the entire Macro Lens rests on.
+**4. Re-examine the scenario deltas.** They are stored as bp changes and rebase
+themselves, so they do not go stale in the way levels did. But a delta can still
+be *wrong*: if Scenario B says the long end sells off 48bp in a month and it has
+already done 40bp, the scenario has partly happened and the remaining delta
+should shrink.
 
----
+**5. Re-check the term-premium attribution** in `sehgalLens.ts`, specifically
+the fragile components. If dealer inventory cleared or positioning unwound
+without a yield move, that bucket has already spent itself and Scenario D loses
+weight.
 
-## Step 5 — Plumbing
+**6. Update the seven manual fields.**
 
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 17 | Reserves, TGA, ON RRP | [H.4.1](https://www.federalreserve.gov/releases/h41/) | `observations.reserves/tga/onRrp`, L3 |
-| 18 | SOFR, TGCR, IORB, **and the 99th-percentile SOFR** | [NY Fed reference rates](https://www.newyorkfed.org/markets/reference-rates/sofr) | `observations.sofrIorb`, L3 |
-| 19 | SRF take-up | [NY Fed operations](https://www.newyorkfed.org/markets/desk-operations/reverse-repo) | L3, scorecard |
-| 20 | 10y SOFR swap spread | [OFR monitor](https://www.financialresearch.gov/short-term-funding-monitor/) / dealer runs | `observations.swapSpread10y`, L2/L3 |
-| 21 | Leveraged-fund gross UST futures short | [CFTC TFF](https://www.cftc.gov/MarketReports/CommitmentsofTraders/) | `observations.basisTrade`, L3, Scenario D triggers |
+**7. Update the watchlist** — drop past events, add the next six weeks.
 
-> Pull the **99th-percentile minus median** SOFR spread, not just the median.
-> Distributions widen before medians move; in September 2019 the tails were
-> screaming for a fortnight while the average looked immaculate.
+**8. Set `narrativeReviewedOn`** in `marketData.ts` *and* `scenarios.ts`.
 
----
+**9. Append to `docs/CHANGELOG.md`**: what changed, what the last run got wrong,
+and what the framework failed to anticipate. The third is the only one that
+improves anything.
 
-## Step 6 — Cross-border, mortgages, credit, vol
-
-| # | Pull | Source | Writes to |
-|---|---|---|---|
-| 22 | JGB 10y and **30y**, BoJ policy rate | [MoF](https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/) | `observations.jgb10y`, L4 |
-| 23 | USD/JPY 3m implied vol, cross-currency basis; recompute hedged UST yields | Dealer runs | L4 (tag `[E]`, method in DATA_DICTIONARY) |
-| 24 | TIC / custody holdings (6-week lag — mark accordingly) | [TIC](https://home.treasury.gov/data/treasury-international-capital-tic-system) | L4 |
-| 25 | 30y mortgage rate, primary-secondary spread, MBS OAS, CPR | [Freddie PMMS](https://www.freddiemac.com/pmms) + dealer runs | `observations.mortgage30y`, L5 |
-| 26 | Bank AFS/HTM unrealised (quarterly) | [FFIEC](https://cdr.ffiec.gov/public/) | L5, institution lens |
-| 27 | IG, HY, **CCC** OAS and all-in yields | [FRED ICE BofA](https://fred.stlouisfed.org/series/BAMLH0A0HYM2) | `observations.igOas/hyOas`, L6 |
-| 28 | MOVE, VIX, S&P level | ICE / CBOE | `observations.move/vix`, L6 |
-
----
-
-## Step 7 — Rewrite the judgement, not just the numbers
-
-This is the step that separates a refresh from a data entry exercise.
-
-1. **Re-derive the decompositions.** `decompositions` in `marketData.ts` must
-   still reconcile on both views. The audit will fail if they do not. Do not
-   force them — a residual that will not close means the attribution is wrong.
-2. **Move the probabilities, and move `priorProbability` first.** Apply the
-   scorecard rules mechanically to what actually printed, then adjust for
-   judgement, then write down which of the two you did. If nothing moved, the
-   audit raises a WARN and you owe the reader a sentence explaining why.
-3. **Re-examine every steelman.** If a layer's steelman has become the base
-   case, the signal should have flipped. Steelmen that never win are decoration.
-4. **Check the flips-on conditions.** Any that fired must be honoured.
-5. **Re-check the term-premium attribution.** Specifically the fragile
-   components: if dealer inventory cleared or the CFTC short shrank without a
-   yield move, the fragile bucket has already spent itself and Scenario D loses
-   weight.
-6. **Update the watchlist**, dropping past events and adding the next six weeks.
-7. **Append to `docs/CHANGELOG.md`** — what changed, what you got wrong last
-   time, and what the framework failed to anticipate. The third item is the
-   only one that improves the framework.
-
----
-
-## Step 8 — Verify and commit
+### Verify
 
 ```bash
 npm run build --prefix app
 ```
 
-The build runs `tsc --noEmit` first, so a mistyped path field is a compile error
-rather than a blank table cell. Then open the app and check the self-check bar
-reads **0 FAIL**. WARNs are acceptable when defended in writing; FAILs mean the
-numbers on the page contradict each other.
-
-```bash
-git add -A && git commit -m "refresh: anchor YYYY-MM-DD"
-```
+`tsc --noEmit` runs first, so a mistyped path field is a compile error rather
+than a blank table cell. Then open the app: the self-check bar should read
+**0 FAIL**. WARNs are acceptable when defended in writing on the page; FAILs
+mean the numbers contradict each other.
 
 ---
 
-## Automation candidates, in value order
+## When the pipeline breaks
 
-1. **Steps 1, 7, 17, 18, 27, 28** are all FRED series and could be a single
-   scheduled script writing `observations`. This alone would remove most
-   staleness.
-2. **Step 12** — TreasuryDirect publishes auction results as XML.
-3. **Step 15** — the MTS is on `fiscaldata.treasury.gov` with a clean JSON API,
-   and the primary/interest split is a two-field query.
+**Symptom: header shows ● OFFLINE.** The runtime fetch of
+`data/snapshot.json` failed. The page is serving the build-time copy, which is
+valid and dated. Usually a network issue or the site has not deployed yet.
 
-Steps 7 (judgement) and the steelman review are not automation candidates and
-should not become ones.
+**Symptom: header shows ● BUILD-TIME after a data commit.** The deploy did not
+run. Most likely cause: a push made by `GITHUB_TOKEN` does not trigger other
+workflows, which is why `deploy.yml` also listens for `workflow_run`. Check that
+trigger survives any workflow edit.
+
+**Symptom: self-check says the snapshot is more than 4 days old.** The scheduled
+job has stopped. Check Actions permissions are read+write — a fetch that
+succeeds and then fails to commit looks like success in the logs.
+
+**Symptom: a series suddenly reads `n/a`.** The series was retired or renamed
+upstream. The fetcher records it under `failures` and the Data Feed tab shows
+it; find the replacement ID on FRED and update `sources.mjs`. The framework
+degrades rather than lying, which is the intended behaviour.
+
+**Symptom: a value is off by a factor of 100 or 1,000,000.** A `scale` mismatch.
+Check `fromUnit`/`toUnit` on that entry against what the source publishes.

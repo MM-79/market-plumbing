@@ -1,14 +1,16 @@
 {
   "name": "yield-curve-prime",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "type": "module",
-  "description": "Leviathan v2 rates framework with the Sehgal macro lens, rendered as a self-auditing terminal.",
+  "description": "Self-refreshing US rates and Treasury-plumbing framework: Leviathan v2 spine, Sehgal macro lens, audits itself in public.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "refresh": "node scripts/fetch-snapshot.mjs",
+    "refresh:check": "node scripts/fetch-snapshot.mjs --no-history"
   },
   "dependencies": {
     "react": "^18.2.0",

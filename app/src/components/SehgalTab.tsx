@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import {
-  dualNarratives, flowChannels, debtResult, stimulusResult, fiscalCommentary,
-  termPremiumAttribution, crossAssetChains, asymmetryCommentary, FISCAL_INPUTS,
+  buildDualNarratives, flowChannels, debtResult, stimulusResult, fiscalCommentary,
+  termPremiumAttribution, crossAssetChains, asymmetryCommentary, fiscalInputs,
 } from '../data/sehgalLens';
 import { debtDynamics } from '../lib/fiscal';
+import type { Snapshot } from '../lib/snapshot';
+import { val } from '../lib/snapshot';
 
 /**
  * The Sehgal Macro Lens.
@@ -15,16 +17,22 @@ import { debtDynamics } from '../lib/fiscal';
  * reader gets to see the framework disagree with itself, which is the only
  * honest way to present a view that rests on a contested decomposition.
  */
-export function SehgalTab() {
-  // Live sensitivity on the one input the whole debt argument turns on.
-  const [growth, setGrowth] = useState(FISCAL_INPUTS.nominalGrowthPct);
-  const [effRate, setEffRate] = useState(
-    (FISCAL_INPUTS.netInterest / FISCAL_INPUTS.debtHeldByPublic) * 100,
-  );
+export function SehgalTab({ snap }: { snap: Snapshot }) {
+  const inputs = fiscalInputs(snap);
+  const base = debtResult(snap);
+  const channels = flowChannels(snap);
+  const stimulus = stimulusResult(snap);
+  const commentary = fiscalCommentary(snap);
+  const dualNarratives = buildDualNarratives(snap);
+  const tp = val(snap, 'kimWright10y');
+
+  // Live sensitivity on the two inputs the whole debt argument turns on.
+  const [growth, setGrowth] = useState(inputs.nominalGrowthPct);
+  const [effRate, setEffRate] = useState(base.effectiveRatePct);
   const live = debtDynamics({
-    ...FISCAL_INPUTS,
+    ...inputs,
     nominalGrowthPct: growth,
-    netInterest: (effRate / 100) * FISCAL_INPUTS.debtHeldByPublic,
+    netInterest: (effRate / 100) * inputs.debtHeldByPublic,
   });
 
   return (
@@ -82,7 +90,7 @@ export function SehgalTab() {
           2. FOLLOW THE FLOWS &mdash; A DOLLAR OF DEFICIT IS NOT A DOLLAR OF STIMULUS
         </div>
         <div className="p-4 space-y-4">
-          <p className="text-sm text-terminal-text leading-relaxed">{fiscalCommentary.headline}</p>
+          <p className="text-sm text-terminal-text leading-relaxed">{commentary.headline}</p>
 
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -97,7 +105,7 @@ export function SehgalTab() {
                 </tr>
               </thead>
               <tbody>
-                {flowChannels.map((c, i) => (
+                {channels.map((c, i) => (
                   <tr key={i}>
                     <td className="text-terminal-text font-semibold">{c.channel}</td>
                     <td className="font-mono">{c.amountTn.toFixed(2)}</td>
@@ -114,15 +122,15 @@ export function SehgalTab() {
                 ))}
                 <tr className="bg-terminal-accent/10 font-bold">
                   <td className="text-terminal-accent">TOTAL</td>
-                  <td className="font-mono">{stimulusResult.headlineTn.toFixed(2)}</td>
+                  <td className="font-mono">{stimulus.headlineTn.toFixed(2)}</td>
                   <td colSpan={2} className="text-[10px] text-terminal-muted">
-                    Headline {stimulusResult.headlinePctGdp.toFixed(1)}% of GDP
+                    Headline {stimulus.headlinePctGdp.toFixed(1)}% of GDP
                   </td>
-                  <td className="font-mono text-terminal-accent">{stimulusResult.effectiveTn.toFixed(2)}</td>
+                  <td className="font-mono text-terminal-accent">{stimulus.effectiveTn.toFixed(2)}</td>
                   <td className="text-[10px] text-terminal-text">
-                    Effective impulse {stimulusResult.effectivePctGdp.toFixed(1)}% of GDP.
-                    Aggregate multiplier {stimulusResult.multiplier.toFixed(2)}.
-                    Leakage to low-MPC hands: ${stimulusResult.leakageTn.toFixed(2)}tn.
+                    Effective impulse {stimulus.effectivePctGdp.toFixed(1)}% of GDP.
+                    Aggregate multiplier {stimulus.multiplier.toFixed(2)}.
+                    Leakage to low-MPC hands: ${stimulus.leakageTn.toFixed(2)}tn.
                   </td>
                 </tr>
               </tbody>
@@ -132,11 +140,11 @@ export function SehgalTab() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className="bg-bear-red/5 border border-bear-red/25 rounded p-3">
               <div className="text-[10px] font-bold text-bear-red uppercase tracking-wider mb-1">The reflexive loop</div>
-              <p className="text-[11px] text-terminal-muted leading-relaxed">{fiscalCommentary.theReflexiveLoop}</p>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{commentary.theReflexiveLoop}</p>
             </div>
             <div className="bg-info-blue/5 border border-info-blue/25 rounded p-3">
               <div className="text-[10px] font-bold text-info-blue uppercase tracking-wider mb-1">Endogenous or exogenous growth?</div>
-              <p className="text-[11px] text-terminal-muted leading-relaxed">{fiscalCommentary.theEndogeneityQuestion}</p>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{commentary.theEndogeneityQuestion}</p>
             </div>
           </div>
         </div>
@@ -160,10 +168,10 @@ export function SehgalTab() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { k: 'Debt held by public', v: `${(debtResult.debtToGdp * 100).toFixed(0)}% of GDP` },
-              { k: 'Headline deficit', v: `${debtResult.headlineDeficitPctGdp.toFixed(1)}%` },
-              { k: 'of which net interest', v: `${debtResult.netInterestPctGdp.toFixed(1)}%`, alert: true },
-              { k: 'Primary deficit', v: `${debtResult.primaryDeficitPctGdp.toFixed(1)}%` },
+              { k: 'Debt held by public', v: `${(base.debtToGdp * 100).toFixed(0)}% of GDP` },
+              { k: 'Headline deficit', v: `${base.headlineDeficitPctGdp.toFixed(1)}%` },
+              { k: 'of which net interest', v: `${base.netInterestPctGdp.toFixed(1)}%`, alert: true },
+              { k: 'Primary deficit', v: `${base.primaryDeficitPctGdp.toFixed(1)}%` },
             ].map((m) => (
               <div key={m.k} className="bg-terminal-bg border border-terminal-border rounded p-3">
                 <div className="text-[10px] text-terminal-muted">{m.k}</div>
@@ -232,7 +240,7 @@ export function SehgalTab() {
             <div className="text-[10px] font-bold text-bear-red uppercase tracking-wider mb-1">
               The honest counter &mdash; read this before quoting the comfortable arithmetic
             </div>
-            <p className="text-[11px] text-terminal-muted leading-relaxed">{fiscalCommentary.theHonestCounter}</p>
+            <p className="text-[11px] text-terminal-muted leading-relaxed">{commentary.theHonestCounter}</p>
           </div>
         </div>
       </div>
@@ -246,7 +254,7 @@ export function SehgalTab() {
           <p className="text-xs text-terminal-muted leading-relaxed">
             When everyone is worried about the long end, that consensus is itself a reason the long
             end is cheap &mdash; and the crowd cannot exit through a door it is standing in. The
-            question is how much of the {termPremiumAttribution.totalBp}bp has a fundamental owner
+            question is how much of the {tp !== null ? Math.round(tp) : termPremiumAttribution.totalBp}bp has a fundamental owner
             and how much is simply a crowded position.
           </p>
           <div className="space-y-1">

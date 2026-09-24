@@ -5,7 +5,119 @@ previous run got wrong.
 
 ---
 
-## v3.0 — 2026-09-24
+## v3.1 - 2026-09-24
+
+**The data now fetches itself, and doing so proved that every number in v3.0 was
+invented.**
+
+### The finding
+
+v3.0 shipped with elaborate provenance machinery: source keys, as-of dates,
+staleness limits, an audit verifying every observation carried a citation. It
+all passed. Then the first real fetch ran.
+
+| Field | v3.0 claimed | Actually published | Error |
+|---|---|---|---|
+| 10y Treasury | 5.14% | 4.96% | 18bp |
+| 30y Treasury | 5.34% | 5.29% | 5bp |
+| 2y Treasury | 4.75% | 4.71% | 4bp |
+| 10y TIPS real | 2.42% | 2.63% | 21bp |
+| 5y5y breakeven | 2.72% | 2.36% | 36bp |
+| IG OAS | 108bp | 77bp | 31bp |
+| HY OAS | 342bp | 273bp | 69bp |
+| CCC OAS | 782bp | 1093bp | 311bp |
+| VIX | 19.4 | 14.2 | - |
+| ON RRP | $89bn | $0.46bn | ~200x |
+| Reserves | $3.28tn | $3.01tn | $270bn |
+| Kim-Wright 10y TP | 65bp | 96bp | 31bp |
+| 30y mortgage | 7.22% | 6.95% | 27bp |
+| Debt held by public | $32.1tn | $32.38tn | $280bn |
+| Nominal GDP | $31.5tn | $32.49tn | $990bn |
+| Net interest | $0.94tn | $1.25tn | $310bn |
+
+**A citation is not a measurement.** The v3.0 audit checked that numbers carried
+a source, which is worth nothing if nobody ever fetched them.
+
+### What this changed analytically, not just cosmetically
+
+1. **The inflation risk premium dropped from second to fifth** among the drivers
+   of the long end. v3.0 ranked it second on a 5y5y breakeven of 2.72%. The real
+   figure is 2.36%, at or below target-consistent levels. The long end is not
+   held up by inflation expectations, and the entire "energy inflation risk
+   premium" thread was an artefact of an invented number.
+2. **The credit layer inverted.** v3.0 called credit "widening but orderly" from
+   342bp. HY is actually at 273bp, near cycle tights - but CCC is at 1093bp
+   against BB at 159bp, a ratio near 6.9x. The story is not widening; it is
+   index-level calm masking extreme quality dispersion, which is a sharper and
+   later-cycle signal. L6 confidence went MED to HIGH.
+3. **The plumbing warning got worse and more specific.** ON RRP is not $89bn, it
+   is $0.46bn - the buffer is not thin, it is gone. Reserves at $3.01tn are
+   about 9.3% of GDP, at or through the bottom of most lowest-comfortable-level
+   estimates rather than $200bn above them.
+4. **Scenario C gained weight (23 to 28%) and B lost it (22 to 20%).** The
+   payroll three-month average is 71k, not the 118k v3.0 asserted. A labour
+   market decelerating from a low base, meeting a credit index at its tights,
+   is a materially different risk balance. Against that, the effective rate on
+   the debt stock is 3.85% versus nominal growth of 6.56%, so the snowball term
+   is firmly negative and the fiscal-meltdown thesis is weaker, not stronger,
+   than v3.0 claimed.
+5. **L4 (cross-border) was demoted to LOW confidence and now prints "verify".**
+   v3.0 gave it a confident BEARISH signal supported entirely by hedged-yield
+   and TIC figures no source had published. There is no free feed for any of it.
+   A layer with no data should look like a layer with no data.
+
+### Structural changes
+
+- **`app/scripts/fetch-snapshot.mjs`** - zero-dependency fetcher pulling 51
+  series and 14 coupon auctions from FRED, the NY Fed reference-rates API,
+  Treasury Fiscal Data and TreasuryDirect. No API key required. Aborts without
+  writing if the curve is missing or more than 40% of sources fail. Writes only
+  when something moved, so the scheduled job produces no empty commits.
+- **Scenario paths are stored as bp DELTAS**, materialised against the live
+  anchor. v3.0 stored absolute levels drawn against a 5.14% 10y; when the tape
+  turned out to be 4.96%, all four scenarios described a market that did not
+  exist. Deltas rebase themselves on every refresh, so the `Today` row equals
+  the live anchor by construction and the path audit cannot fail on it.
+- **Both 10y decompositions are computed**, not asserted: term premium from the
+  Kim-Wright delta, real yield from the TIPS delta, each residual closing its
+  own view. Window start dates are located by scanning the history rather than
+  remembered, so "the 12-month low" re-anchors on every refresh.
+- **The two-clock rule.** Data has an as-of date; the reasoning has a review
+  date. Both in the header. `auditNarrativeFreshness` warns at a 10-day gap and
+  fails at 45, because the characteristic failure of an auto-refreshing
+  framework is stale judgement hiding behind fresh numbers.
+- **`auditPipeline`** replaces the provenance check: sources fetched cleanly,
+  snapshot generated recently, no high-frequency series past its staleness
+  limit, manual fields declared rather than hidden.
+- **Data Feed tab** - pipeline status, the seven manual fields with the reason
+  each cannot be fetched, and the full series register with ages and limits.
+- **`.github/workflows/refresh.yml`** (weekday cron) and **`deploy.yml`**
+  (Pages). The deploy listens for `workflow_run` as well as `push`, because a
+  push made by `GITHUB_TOKEN` does not trigger other workflows - the single most
+  likely way this setup would have silently stopped working.
+- **Snapshot history** in `app/public/data/history/` - one file per refresh, the
+  beginning of an actual track record.
+- Staleness limits corrected for period-dated series. FRED stamps a monthly
+  observation to the START of the period it describes, so July core PCE is
+  already ~55 days "old" the day it publishes. Without this, a third of the
+  pipeline reports itself permanently stale.
+
+### Known limits after this change
+
+- Seven fields remain manual: ACM term premium, MOVE, swap spreads, MBS OAS,
+  auction tails, CFTC positioning, TIC holdings. All named in the UI.
+- Auction **tails** are not computable from any free feed - TreasuryDirect does
+  not publish the when-issued yield at the bid deadline. Bid-to-cover and the
+  bidder split are live.
+- The primary deficit is still an estimate, exposed on a slider so the reader
+  can see how little of the conclusion depends on it.
+- Still no backtest. The snapshot history and `priorProbability` are the start
+  of a track record, not one yet.
+
+---
+
+
+## v3.0 - 2026-09-24 (superseded by v3.1)
 
 A structural rebuild. v2.7.1 was a well-written document rendered as a web page;
 v3.0 is a framework that checks itself.

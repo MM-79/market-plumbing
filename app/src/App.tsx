@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
+import { runSettings, SOURCES, MANUAL_VALUES, buildLayers } from './data/marketData';
 import {
-  runSettings, anchorCheck, parCurve, anchor, observations,
-  diagnosticLayers, decompositions, SOURCES,
-} from './data/marketData';
-import { scenarios, scenarioList, fedToolkitLadder, inventedFacility, fedProbabilityTree } from './data/scenarios';
+  scenarios, scenarioList, fedToolkitLadder, inventedFacility, fedProbabilityTree,
+  materialisePath, pathBase, narrativeReviewedOn,
+} from './data/scenarios';
 import { scorecard, trades, watchlist } from './data/synthesis';
 import { institutionImpacts, treasuryActions, exoticChains, inventedIndicator } from './data/institutionData';
 import {
@@ -19,18 +19,22 @@ import {
   dv01NeutralRatio, spreadCarryRoll, decompositionCheck,
 } from './lib/curve';
 import {
-  auditProbabilities, auditPaths, auditDecompositions, auditProvenance,
-  auditTrades, summarise,
+  auditProbabilities, auditPaths, auditDecompositions, auditPipeline,
+  auditNarrativeFreshness, auditTrades, summarise,
 } from './lib/audit';
+import {
+  useLiveSnapshot, type Snapshot, type SnapshotStatus, ageDays, isStale, fmt, val,
+} from './lib/snapshot';
+import { buildAnchor, buildParCurve, buildDecompositions, type Anchor } from './lib/derive';
+import type { PathRow } from './types/framework';
 
 type Tab = 'dashboard' | 'directive' | 'lens' | 'scenarios' | 'policy'
-  | 'synthesis' | 'institution' | 'exotic' | 'audit' | 'sources';
+  | 'synthesis' | 'institution' | 'exotic' | 'audit' | 'data';
 
 /**
  * Tailwind v4 generates utilities by scanning source for LITERAL class strings.
  * A class built as `text-${tone}` is never emitted and silently renders
- * unstyled. Every conditional colour therefore resolves through this map, where
- * each value is a literal the scanner can see.
+ * unstyled. Every conditional colour therefore resolves through this map.
  */
 type Tone = 'bear-red' | 'bull-green' | 'neutral-amber' | 'info-blue' | 'muted';
 const TONE: Record<Tone, { text: string; tint: string; ring: string; edge: string }> = {
@@ -51,19 +55,56 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'institution', label: 'P6 · Bank Treasury' },
   { id: 'exotic', label: 'Appendix · Exotic' },
   { id: 'audit', label: 'Self-Check' },
-  { id: 'sources', label: 'Sources' },
+  { id: 'data', label: 'Data Feed' },
 ];
+
+/** Everything downstream reads from this one derived bundle. */
+interface View {
+  snap: Snapshot;
+  anchor: Anchor;
+  parCurve: ReturnType<typeof buildParCurve>;
+  layers: ReturnType<typeof buildLayers>;
+  decompositions: ReturnType<typeof buildDecompositions>;
+  paths: Record<'A' | 'B' | 'C' | 'D', PathRow[]>;
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const { snap, status, detail } = useLiveSnapshot();
+
+  const view: View = useMemo(() => {
+    const anchor = buildAnchor(snap);
+    const base = pathBase(snap, {
+      move: MANUAL_VALUES.move.value,
+      swapSpread10y: MANUAL_VALUES.swapSpread10y.value,
+      acm10y: MANUAL_VALUES.acm10y.value,
+    });
+    return {
+      snap,
+      anchor,
+      parCurve: buildParCurve(snap),
+      layers: buildLayers(snap),
+      decompositions: buildDecompositions(snap),
+      paths: {
+        A: materialisePath(scenarios.A.path, anchor, base),
+        B: materialisePath(scenarios.B.path, anchor, base),
+        C: materialisePath(scenarios.C.path, anchor, base),
+        D: materialisePath(scenarios.D.path, anchor, base),
+      },
+    };
+  }, [snap]);
 
   const audit = useMemo(() => summarise([
+    ...auditPipeline(snap),
+    ...auditNarrativeFreshness(narrativeReviewedOn, snap),
     ...auditProbabilities(scenarioList),
-    ...auditPaths(scenarioList, anchor),
-    ...auditDecompositions(decompositions),
-    ...auditProvenance(observations, runSettings.asOfDate),
+    ...auditPaths(
+      (['A', 'B', 'C', 'D'] as const).map((k) => ({ key: k, rows: view.paths[k] })),
+      view.anchor,
+    ),
+    ...auditDecompositions(view.decompositions),
     ...auditTrades(trades, scenarioList.length),
-  ]), []);
+  ]), [snap, view]);
 
   return (
     <div className="min-h-screen bg-terminal-bg text-terminal-text">
@@ -73,19 +114,19 @@ function App() {
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full bg-bull-green pulse-live" />
               <h1 className="text-lg font-bold text-terminal-accent glow-amber tracking-wider">YIELD-CURVE-PRIME</h1>
-              <span className="text-xs text-terminal-muted">v3.0 · Market Plumbing Intelligence</span>
+              <span className="text-xs text-terminal-muted">v3.1 · Self-refreshing</span>
             </div>
             <div className="flex items-center gap-4 text-xs text-terminal-muted">
-              <span>AS OF: <span className="text-terminal-text">{runSettings.asOfDate}</span></span>
-              <span>PRIOR: <span className="text-terminal-text">{runSettings.priorRunDate}</span></span>
-              <span>VOICE: <span className="text-terminal-accent">{runSettings.voiceLabel}</span></span>
+              <span>DATA: <span className="text-terminal-text">{snap.asOfDate}</span></span>
+              <span>NARRATIVE: <span className="text-terminal-text">{runSettings.narrativeReviewedOn}</span></span>
+              <StatusPill status={status} />
             </div>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[10px] text-terminal-muted border-t border-terminal-border pt-2">
             <span>HORIZON: <span className="text-terminal-text">{runSettings.scenarioHorizon}</span></span>
-            <span>INSTITUTION LENS: <span className="text-bull-green">{runSettings.institutionLens}</span></span>
             <span>MACRO LENS: <span className="text-bull-green">{runSettings.macroLens}</span></span>
-            <span>EXOTIC: <span className="text-bull-green">{runSettings.exoticAppendix}</span></span>
+            <span>SERIES: <span className="text-terminal-text">{Object.keys(snap.series).length} live</span></span>
+            <span>MANUAL: <span className="text-neutral-amber">{snap.manualFields.length}</span></span>
             <span>FOCUS: <span className="text-terminal-accent italic">{runSettings.focusQuestion}</span></span>
           </div>
         </div>
@@ -103,9 +144,7 @@ function App() {
                 }`}
               >
                 {t.label}
-                {t.id === 'audit' && audit.fails > 0 && (
-                  <span className="ml-1.5 text-bear-red">●</span>
-                )}
+                {t.id === 'audit' && audit.fails > 0 && <span className="ml-1.5 text-bear-red">●</span>}
               </button>
             ))}
           </div>
@@ -114,24 +153,26 @@ function App() {
 
       <main className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
         <AuditBar summary={audit} onOpen={() => setActiveTab('audit')} />
-        {activeTab === 'dashboard' && <DashboardTab />}
-        {activeTab === 'directive' && <DirectiveTab />}
-        {activeTab === 'lens' && <SehgalTab />}
-        {activeTab === 'scenarios' && <ScenariosTab />}
+        <div className="text-[10px] text-terminal-muted px-1">{detail}</div>
+        {activeTab === 'dashboard' && <DashboardTab v={view} />}
+        {activeTab === 'directive' && <DirectiveTab v={view} />}
+        {activeTab === 'lens' && <SehgalTab snap={snap} />}
+        {activeTab === 'scenarios' && <ScenariosTab v={view} />}
         {activeTab === 'policy' && <PolicyTab />}
         {activeTab === 'synthesis' && <SynthesisTab />}
         {activeTab === 'institution' && <InstitutionTab />}
         {activeTab === 'exotic' && <ExoticTab />}
         {activeTab === 'audit' && <AuditPanel summary={audit} />}
-        {activeTab === 'sources' && <SourcesTab />}
+        {activeTab === 'data' && <DataTab v={view} status={status} detail={detail} />}
       </main>
 
       <footer className="border-t border-terminal-border bg-terminal-panel py-3 mt-8">
         <div className="max-w-[1600px] mx-auto px-4 text-center text-[10px] text-terminal-muted space-y-1">
           <div className="text-terminal-text font-semibold">Analytical framework, not investment advice.</div>
           <div>
-            Tags: [D] data, dated and sourced · [E] estimate, method stated · [I] inference · [S] speculation.
-            All figures are a hand-maintained snapshot; see docs/REFRESH_RUNBOOK.md. Nothing on this page updates itself.
+            Tags: [D] fetched from a named source · [E] estimate, method stated · [I] inference · [S] speculation.
+            Numbers refresh on a schedule; the reasoning does not. Both dates are in the header, and the self-check
+            complains when they drift apart.
           </div>
         </div>
       </footer>
@@ -139,85 +180,62 @@ function App() {
   );
 }
 
+function StatusPill({ status }: { status: SnapshotStatus }) {
+  const map: Record<SnapshotStatus, { label: string; cls: string }> = {
+    baked: { label: '◌ LOADING', cls: 'text-terminal-muted' },
+    live: { label: '● LIVE', cls: 'text-bull-green' },
+    'stale-live': { label: '● BUILD-TIME', cls: 'text-neutral-amber' },
+    error: { label: '● OFFLINE', cls: 'text-bear-red' },
+  };
+  const m = map[status];
+  return <span className={`${m.cls} font-bold`}>{m.label}</span>;
+}
+
 // ============================================================ DASHBOARD ====
 
-function DashboardTab() {
+function DashboardTab({ v }: { v: View }) {
+  const { snap, anchor, parCurve, layers } = v;
   const sp = spreads(anchor);
-  const df = useMemo(() => bootstrapDiscountFactors(parCurve), []);
-  const f5y5y = forwardRate(df, 5, 5);
-  const f10y20y = forwardRate(df, 10, 20);
-  const todayRow = scenarios.A.path[0];
+  const df = useMemo(() => bootstrapDiscountFactors(parCurve), [parCurve]);
+  const todayRow = v.paths.A[0];
+  const reservesPctGdp = (val(snap, 'reserves')! / val(snap, 'nominalGdp')!) * 100;
 
   return (
     <div className="space-y-4">
-      {/* what changed */}
-      <div className="panel">
-        <div className="panel-header flex items-center gap-2">
-          <span className="text-terminal-accent">⚡</span> WHAT CHANGED SINCE {anchorCheck.priorRun}
-        </div>
-        <div className="p-4 overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr><th>Field</th><th>Prior run</th><th>Now</th><th>Delta</th><th>Note</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {anchorCheck.corrections.map((c, i) => (
-                <tr key={i}>
-                  <td className="font-semibold text-terminal-text">{c.field}</td>
-                  <td className="text-terminal-muted font-mono">{c.prior}</td>
-                  <td className="text-terminal-text font-mono">{c.now}</td>
-                  <td className={`font-mono ${c.delta.startsWith('+') ? 'text-bear-red' : c.delta.startsWith('-') ? 'text-bull-green' : 'text-terminal-muted'}`}>{c.delta}</td>
-                  <td className="text-terminal-muted text-[10px]">{c.note}</td>
-                  <td>
-                    <span className={`signal-badge ${
-                      c.status === 'corrected' ? 'signal-bearish'
-                      : c.status === 'stale' ? 'signal-neutral'
-                      : c.status === 'verified' ? 'signal-bullish' : 'signal-neutral'
-                    }`}>{c.status.toUpperCase()}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* curve + derived */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="panel lg:col-span-2">
-          <div className="panel-header">PAR CURVE &mdash; {runSettings.asOfDate}</div>
+          <div className="panel-header">PAR CURVE &mdash; {snap.series.y10?.asOf ?? snap.asOfDate}</div>
           <div className="p-3">
             <CurveChart rows={[{ label: 'Today', row: todayRow }]} title="US Treasury par yields, log tenor axis" />
             <div className="grid grid-cols-3 gap-2 mt-2 text-center border-t border-terminal-border pt-2">
-              {[
-                { k: '2s10s', v: sp.s2s10 }, { k: '5s30s', v: sp.s5s30 }, { k: '2s30s', v: sp.s2s30 },
-              ].map((x) => (
+              {[{ k: '2s10s', n: sp.s2s10 }, { k: '5s30s', n: sp.s5s30 }, { k: '2s30s', n: sp.s2s30 }].map((x) => (
                 <div key={x.k}>
                   <div className="text-[10px] text-terminal-muted">{x.k}</div>
-                  <div className="text-sm font-bold font-mono text-bull-green">+{x.v}bp</div>
+                  <div className={`text-sm font-bold font-mono ${x.n >= 0 ? 'text-bull-green' : 'text-bear-red'}`}>
+                    {x.n > 0 ? '+' : ''}{x.n}bp
+                  </div>
                 </div>
               ))}
             </div>
             <div className="text-[10px] text-terminal-muted mt-2 border-t border-terminal-border pt-2">
-              Every spread above is computed from the four par yields by <code>lib/curve.ts</code>.
-              None is typed. In v1 this panel and the scenario tables disagreed by 18bp because both
-              were typed by hand from different snapshots.
+              Yields fetched from FRED; every spread computed from them by <code>lib/curve.ts</code>.
+              Nothing on this panel was typed by a human.
             </div>
           </div>
         </div>
 
         <div className="panel lg:col-span-3">
-          <div className="panel-header">DERIVED ANALYTICS &mdash; BOOTSTRAPPED FROM THE PAR CURVE</div>
+          <div className="panel-header">DERIVED ANALYTICS &mdash; BOOTSTRAPPED FROM THE LIVE CURVE</div>
           <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { k: '5y5y forward', v: `${f5y5y.toFixed(2)}%`, note: 'Terminal rate plus the premium demanded to own it. The tenor the Parts 1-2 argument is actually about.' },
-              { k: '10y20y forward', v: `${f10y20y.toFixed(2)}%`, note: 'The pure long-end forward. Carries almost no policy-path content at all.' },
-              { k: '2s5s10s fly', v: `${sp.fly2s5s10}bp`, note: 'Negative = belly rich to the wings. The cheapest way to own the plateau-vs-summit disagreement.' },
-              { k: '5s10s30s fly', v: `${sp.fly5s10s30}bp`, note: 'The long-end butterfly. Positive = 10y cheap to its wings.' },
+              { k: '5y5y forward', v: `${forwardRate(df, 5, 5).toFixed(2)}%`, note: 'Terminal rate plus the premium demanded to own it. The tenor the Parts 1-2 argument is really about.' },
+              { k: '10y20y forward', v: `${forwardRate(df, 10, 20).toFixed(2)}%`, note: 'The pure long-end forward. Almost no policy-path content.' },
+              { k: '2s5s10s fly', v: `${sp.fly2s5s10}bp`, note: 'Negative = belly rich to the wings.' },
+              { k: '5s10s30s fly', v: `${sp.fly5s10s30}bp`, note: 'Positive = 10y cheap to its wings.' },
               { k: '10y DV01 / $1mm', v: `$${dv01PerMM(anchor.y10, 10).toFixed(0)}`, note: 'Par bond closed form, semiannual.' },
-              { k: '30y DV01 / $1mm', v: `$${dv01PerMM(anchor.y30, 30).toFixed(0)}`, note: '3.4x the 5y, 1.9x the 10y. Ignore this and a curve trade becomes an accidental duration position.' },
+              { k: '30y DV01 / $1mm', v: `$${dv01PerMM(anchor.y30, 30).toFixed(0)}`, note: `${(dv01PerMM(anchor.y30, 30) / dv01PerMM(anchor.y5, 5)).toFixed(1)}x the 5y. Ignore it and a curve trade becomes an accidental duration position.` },
               { k: '5s30s DV01-neutral', v: `${dv01NeutralRatio({ parYieldPct: anchor.y5, years: 5 }, { parYieldPct: anchor.y30, years: 30 }).frontPer100mmBack.toFixed(0)}mm`, note: '5y notional per $100mm of 30y.' },
-              { k: '5s30s 3m carry+roll', v: `${spreadCarryRoll(parCurve, 5, 30, 3).netRollBp > 0 ? '+' : ''}${spreadCarryRoll(parCurve, 5, 30, 3).netRollBp}bp`, note: 'Roll-down on the spread, curve held still.' },
+              { k: '5s30s 3m roll', v: `${spreadCarryRoll(parCurve, 5, 30, 3).netRollBp > 0 ? '+' : ''}${spreadCarryRoll(parCurve, 5, 30, 3).netRollBp}bp`, note: 'Roll-down on the spread, curve held still.' },
             ].map((m) => (
               <div key={m.k} className="bg-terminal-bg border border-terminal-border rounded p-2">
                 <div className="text-[10px] text-terminal-muted">{m.k}</div>
@@ -229,50 +247,46 @@ function DashboardTab() {
         </div>
       </div>
 
-      {/* upshot */}
       <div className="panel">
-        <div className="panel-header">THE UPSHOT &mdash; THREE SENTENCES</div>
+        <div className="panel-header">THE UPSHOT</div>
         <div className="p-4 space-y-3 text-sm leading-relaxed">
           <p>
             <span className="text-terminal-accent font-bold">DRIVER: </span>
-            The 10y is 102bp above its February low, and the decomposition matters more than the
-            number: roughly 70bp is expected policy path and 32bp is term premium, which means the
-            fiscal supply story owns about a third of the move rather than all of it. Since Jackson
-            Hole the mix has tilted toward the long end &mdash; a measured bear steepener, 30y
-            outrunning 10y by 10bp &mdash; but even in that window term premium is only 12 of 32bp.
+            The long end carries a high term premium &mdash; Kim-Wright at {fmt(val(snap, 'kimWright10y'), 0)}bp &mdash;
+            while the front is held by a policy rate that is only {fmt(val(snap, 'realPolicyRate'))}% in real terms and
+            therefore barely restrictive at all. The result is 2s10s at {sp.s2s10 > 0 ? '+' : ''}{sp.s2s10}bp with the
+            risk premium sitting almost entirely at the back. Note what is NOT driving it: the 5y5y breakeven is{' '}
+            {fmt(val(snap, 'bei5y5y'))}%, at or below target-consistent levels. Whatever is holding the long end up, the
+            market&rsquo;s long-run inflation expectation is not it.
           </p>
           <p>
             <span className="text-terminal-accent font-bold">RISK BALANCE: </span>
-            Muddle-through at 45% remains the base case, the fiscal meltdown at 22% is real but
-            resolvable by a Treasury press release rather than a crisis, and stagflationary breakage
-            at 23% is the genuine fiscal tail because it is the only path where nominal growth falls
-            below the effective coupon. The new line is Scenario D at 10%: about 22bp of the 78bp
-            term premium has no fundamental owner, which is enough fuel for a 40-45bp rally that
-            requires nothing at all to change about the deficit, the Fed, or the foreign bid.
+            Two numbers should unsettle anyone reading this page. Payroll growth is averaging{' '}
+            {fmt(val(snap, 'nfp3mAvg'), 0)}k over three months, and CCC sits at {fmt(val(snap, 'cccOas'), 0)}bp against
+            BB at {fmt(val(snap, 'bbOas'), 0)}bp. A labour market decelerating from a low base, met by a credit index at
+            its tights with no cushion, is what moves weight toward the growth scenario rather than the fiscal one.
           </p>
           <p>
             <span className="text-terminal-accent font-bold">WATCH: </span>
-            Two dates, in this order. The August PCE print on 26 September is the largest single
-            information event in this run and it can move 8pp in either direction on one number. The
-            7 November refunding is the cheapest possible resolution of the entire fiscal argument:
-            a bill share guided above 22% removes roughly $40B a month of duration and kills
-            Scenario B on the announcement, not on the data.
+            ON RRP take-up is {fmt(val(snap, 'onRrp'), 2)}bn &mdash; the facility that absorbed trillions in 2022 is
+            empty &mdash; and reserves are {fmt(val(snap, 'reserves'))}tn, about {reservesPctGdp.toFixed(1)}% of GDP,
+            at or through the bottom of most estimates of the comfortable range. The SOFR distribution is the thing to
+            watch and its tail is currently {fmt(val(snap, 'sofrTailWidth'), 0)}bp wide.
           </p>
         </div>
       </div>
 
-      {/* diagnostic spine */}
       <div className="panel">
         <div className="panel-header">DIAGNOSTIC SPINE &mdash; SIX LAYERS, EACH WITH ITS OWN STRONGEST COUNTER</div>
         <div className="p-4 space-y-4">
           <p className="text-[11px] text-terminal-muted">
-            v1 change: every layer now carries a <span className="text-terminal-accent">STEELMAN</span> &mdash;
-            the best available argument that the layer&rsquo;s own signal is wrong &mdash; and a
-            <span className="text-terminal-accent"> FLIPS ON</span> line naming the single observable
-            that would change it. A six-layer dashboard where all six agree is not six pieces of
-            evidence; it is one piece of evidence counted six times.
+            Metrics are fetched. Signals, narratives and steelmen are judgement, last re-reasoned on{' '}
+            <span className="text-terminal-accent">{runSettings.narrativeReviewedOn}</span>. A layer marked
+            <span className="text-neutral-amber"> LOW</span> confidence with &ldquo;verify&rdquo; metrics is one this
+            framework genuinely cannot measure &mdash; a better thing to display than a confident signal resting on
+            nothing.
           </p>
-          {diagnosticLayers.map((l) => (
+          {layers.map((l) => (
             <div key={l.id} className="border border-terminal-border rounded overflow-hidden">
               <div className="bg-terminal-bg px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
@@ -292,8 +306,10 @@ function DashboardTab() {
               </div>
               <div className="p-3 space-y-3">
                 <div className="flex flex-wrap gap-1.5">
-                  {l.metrics.map((m) => (
-                    <span key={m.name} className="text-[10px] bg-terminal-bg border border-terminal-border rounded px-1.5 py-0.5">
+                  {l.metrics.map((m, i) => (
+                    <span key={i} className={`text-[10px] border rounded px-1.5 py-0.5 ${
+                      m.stale ? 'bg-neutral-amber/10 border-neutral-amber/40' : 'bg-terminal-bg border-terminal-border'
+                    }`}>
                       <span className="text-terminal-muted">{m.name}</span>{' '}
                       <span className="text-terminal-text font-mono">{m.value}</span>{' '}
                       <span className="text-terminal-muted/50">[{m.tag}]</span>
@@ -317,6 +333,36 @@ function DashboardTab() {
         </div>
       </div>
 
+      <div className="panel">
+        <div className="panel-header">RECENT COUPON AUCTIONS &mdash; FETCHED FROM TREASURYDIRECT</div>
+        <div className="p-4 overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr><th>Date</th><th>Term</th><th>High yield</th><th>Bid-to-cover</th><th>Size</th><th>Indirect</th><th>Direct</th><th>Dealer</th></tr>
+            </thead>
+            <tbody>
+              {snap.auctions.slice(0, 8).map((a) => (
+                <tr key={a.cusip}>
+                  <td className="font-mono text-terminal-accent">{a.auctionDate}</td>
+                  <td className="text-terminal-text">{a.term}</td>
+                  <td className="font-mono">{a.highYield.toFixed(3)}%</td>
+                  <td className="font-mono">{a.bidToCover?.toFixed(2) ?? 'n/a'}</td>
+                  <td className="font-mono">${a.totalAcceptedBn.toFixed(1)}bn</td>
+                  <td className="font-mono">{a.indirectPct.toFixed(1)}%</td>
+                  <td className="font-mono">{a.directPct.toFixed(1)}%</td>
+                  <td className={`font-mono ${a.dealerPct > 25 ? 'text-bear-red' : ''}`}>{a.dealerPct.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[10px] text-terminal-muted mt-2">
+            TreasuryDirect does not publish the when-issued yield at the bid deadline, so the TAIL cannot be computed
+            from this feed. Bid-to-cover and the bidder split are live; tails remain manual and are listed as such on
+            the Data Feed tab. Dealer takedown above 25% is highlighted, since that is the L2 stress threshold.
+          </p>
+        </div>
+      </div>
+
       <SoWhatSection data={soWhat_Part0} partTitle="Part 0 — Current State" />
     </div>
   );
@@ -324,46 +370,44 @@ function DashboardTab() {
 
 // ============================================================ DIRECTIVE ====
 
-function DirectiveTab() {
+function DirectiveTab({ v }: { v: View }) {
   return (
     <div className="space-y-4">
       <div className="panel">
-        <div className="panel-header text-terminal-accent">PART 1 &mdash; DECOMPOSING THE MOVE, PER WINDOW, WITH THE REGIME MEASURED</div>
+        <div className="panel-header text-terminal-accent">PART 1 &mdash; DECOMPOSING THE MOVE, COMPUTED FROM PUBLISHED SERIES</div>
         <div className="p-4 space-y-4">
           <p className="text-xs text-terminal-muted leading-relaxed">
-            Two decompositions per window, each summing to the total independently. Path and term
-            premium is one camera; real yield and breakeven is another camera on the same object.
-            v1 added the two together and got 102bp out of three components that double-counted
-            inflation compensation &mdash; it appears inside both path and term premium, never
-            alongside them. The regime label under each window is computed by
-            <code> classifyRegime()</code> from the 2y and 10y moves, not asserted.
+            Both decompositions come straight out of the data. Term premium is the change in Kim-Wright, so the
+            expected-path component is its residual; the real-yield component is the change in the 10y TIPS yield, so
+            inflation compensation is its residual. Each view sums to the total independently, by construction. The
+            windows are located in the history rather than remembered &mdash; the &ldquo;low&rdquo; below is found by
+            scanning the series, so it re-anchors on every refresh instead of quietly referring to a level that stopped
+            being the low months ago.
           </p>
-          {decompositions.map((d) => {
+          {v.decompositions.map((d) => {
             const c = decompositionCheck(d);
             return (
               <div key={d.window} className="border border-terminal-border rounded overflow-hidden">
                 <div className="bg-terminal-bg px-3 py-2 flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-sm font-bold text-terminal-accent">{d.window} ({d.startDate})</span>
+                  <span className="text-sm font-bold text-terminal-accent">{d.window} (from {d.startDate})</span>
                   <div className="flex items-center gap-3 text-xs">
                     <span className="font-mono">{d.startY10.toFixed(2)}% &rarr; {d.endY10.toFixed(2)}%</span>
                     <span className={`font-mono font-bold ${c.totalBp > 0 ? 'text-bear-red' : 'text-bull-green'}`}>
                       {c.totalBp > 0 ? '+' : ''}{c.totalBp}bp
                     </span>
-                    <span className="signal-badge signal-bearish uppercase">{c.regime.regime}</span>
+                    <span className="signal-badge signal-neutral uppercase">{c.regime.regime}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-terminal-border">
                   <div className="bg-terminal-panel p-3">
                     <div className="text-[10px] font-bold text-terminal-muted uppercase tracking-wider mb-2">View 1 &mdash; risk-neutral path vs risk premium</div>
                     <Bar label="Expected policy path" bp={d.expectedPathBp} total={c.totalBp} color="bg-info-blue/60" />
-                    <Bar label="Term premium (ACM)" bp={d.termPremiumBp} total={c.totalBp} color="bg-bear-red/60" />
-                    <div className="text-[10px] text-terminal-muted mt-1">Residual: {c.view1Residual}bp</div>
+                    <Bar label="Term premium (Kim-Wright)" bp={d.termPremiumBp} total={c.totalBp} color="bg-bear-red/60" />
                   </div>
                   <div className="bg-terminal-panel p-3">
                     <div className="text-[10px] font-bold text-terminal-muted uppercase tracking-wider mb-2">View 2 &mdash; real yield vs inflation compensation</div>
-                    <Bar label="Real yield" bp={d.realYieldBp} total={c.totalBp} color="bg-bull-green/60" />
+                    <Bar label="Real yield (10y TIPS)" bp={d.realYieldBp} total={c.totalBp} color="bg-bull-green/60" />
                     <Bar label="Breakeven" bp={d.breakevenBp} total={c.totalBp} color="bg-neutral-amber/60" />
-                    <div className="text-[10px] text-terminal-muted mt-1">Residual: {c.view2Residual}bp</div>
                   </div>
                 </div>
                 <div className="p-3 border-t border-terminal-border bg-terminal-accent/5">
@@ -380,52 +424,15 @@ function DirectiveTab() {
       </div>
 
       <div className="panel">
-        <div className="panel-header text-terminal-accent">THE THREE-WAY BATTLE &mdash; AND WHAT WOULD FLIP IT</div>
-        <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {[
-              { t: 'RESILIENT DATA', s: 'LOSING SLOWLY', c: 'bull-green' as Tone, d: 'PMIs firm, payrolls 3m avg +118k and decelerating. Not broken, not helping.' },
-              { t: 'DURATION SUPPLY', s: 'WINNING', c: 'bear-red' as Tone, d: 'Tails, weak indirects, bill share below TBAC guidance. Winning on the margin, not on the whole move.' },
-              { t: 'FED WILL NOT PIVOT', s: 'HOLDING', c: 'neutral-amber' as Tone, d: 'Three dissents to hike. Real policy rate still 67bp below neutral estimates.' },
-            ].map((x) => (
-              <div key={x.t} className={`p-3 rounded ${TONE[x.c].tint} border ${TONE[x.c].ring}`}>
-                <div className={`text-[10px] font-bold ${TONE[x.c].text}`}>{x.t}</div>
-                <div className={`text-xl font-bold ${TONE[x.c].text} mt-1`}>{x.s}</div>
-                <div className="text-[10px] text-terminal-muted mt-1 leading-snug">{x.d}</div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-terminal-bg border border-terminal-border rounded p-3 space-y-2">
-            <p className="text-xs text-terminal-text leading-relaxed">
-              <span className="font-bold text-terminal-accent">Currently winning: duration supply, but by less than the narrative claims.</span>{' '}
-              The market is price-clearing rather than quantity-clearing &mdash; yields rise until the
-              marginal buyer engages, and the estimated level at which domestic real money engages in
-              size is roughly 5.25% on the 10y [E], about 11bp from here. That is a very different
-              statement from &ldquo;there is no buyer&rdquo;, which is incoherent: every bond that
-              exists is owned by somebody at every moment.
-            </p>
-            <p className="text-xs text-terminal-muted leading-relaxed">
-              <span className="font-bold text-terminal-text">What flips it: </span>
-              (a) a QRA bill-share shift above 22%, which removes the supply without removing the
-              deficit; (b) two negative payroll prints, which collapses the whole argument into a
-              policy-path story; or (c) the CFTC de-grossing signature, where a record short stops
-              producing new yield highs &mdash; the point at which supply stops being the marginal
-              price-setter and positioning takes over.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel">
         <div className="panel-header text-terminal-accent">WHY THE LONG END IS WHERE IT IS &mdash; RANKED BY EVIDENTIARY SUPPORT</div>
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {[
-            { r: 1, t: 'Term premium normalisation', tone: 'bear-red' as Tone, d: 'ACM +78bp from +46bp in February; Kim-Wright +65bp. Both models agree on direction. Worth stating plainly: the 1990-2007 average was above 150bp, so +78bp is not a crisis level, it is the partial removal of a QE-era distortion. [D]' },
-            { r: 2, t: 'Duration supply, Treasury and corporate', tone: 'bear-red' as Tone, d: '$128B/month net coupon into a market where IG has already absorbed $1.12tn YTD, $184bn of it AI and hyperscaler paper competing for the same buyer. Bill share at 18.2% is a policy choice adding duration, not absorbing it. [D/E]' },
-            { r: 3, t: 'Inflation risk premium from energy', tone: 'neutral-amber' as Tone, d: '5y5y breakevens +24bp from February with WTI at $92. This is compensation for variance, not for level, and it is the component most likely to reverse quickly. [D]' },
-            { r: 4, t: 'Foreign demand substitution', tone: 'neutral-amber' as Tone, d: 'The important part is not that Japan is selling - it is that the 30y JGB at 2.64% is a genuine domestic substitute for the first time in twenty years. That is structural and it does not reverse when oil falls. [D/E]' },
-            { r: 5, t: 'Dealer balance-sheet scarcity', tone: 'muted' as Tone, d: 'Dealer UST inventory at $284B, above the 90th percentile, with the 10y swap spread at -12bp pricing it directly. Roughly 10bp of the term premium [I]. Mechanically unwinds when inventory clears - this is not a view about America. ' },
-            { r: 6, t: 'Positioning and the bandwagon', tone: 'bull-green' as Tone, d: 'Roughly 12bp of term premium with no fundamental owner [I]. Listed last by evidentiary support and first by reversal speed. It is the only component that can vanish in a week with no news, which is exactly why it is the one nobody models.' },
+            { r: 1, t: 'Term premium normalisation', tone: 'bear-red' as Tone, d: `Kim-Wright has the 10y term premium near ${fmt(val(v.snap, 'kimWright10y'), 0)}bp. Worth stating plainly: the pre-2008 average was higher still, so an elevated term premium is not in itself a crisis signal - it is the partial removal of a quantitative-easing distortion. [D]` },
+            { r: 2, t: 'Duration supply', tone: 'bear-red' as Tone, d: `Debt held by the public is ${fmt(val(v.snap, 'debtHeldByPublic'))}tn and the auction calendar is relentless. But the live bidder splits do not show a buyer strike - indirect participation across recent coupons is running in its normal range, which is the opposite of what the supply thesis predicts. [D]` },
+            { r: 3, t: 'Inflation risk premium', tone: 'muted' as Tone, d: `Demoted from second to fifth on the live data, and this is the single largest correction to the previous version of this framework. The 5y5y breakeven is ${fmt(val(v.snap, 'bei5y5y'))}% - at or below target-consistent levels. The long end is not being held up by inflation expectations. [D]` },
+            { r: 4, t: 'Foreign demand', tone: 'muted' as Tone, d: 'Unmeasurable with the current pipeline. TIC publishes with a six-week lag in fixed-width text and there is no free feed for hedged yields. The previous version ranked this fourth on the strength of numbers no source had published. [I]' },
+            { r: 5, t: 'Dealer balance-sheet scarcity', tone: 'muted' as Tone, d: 'Priced directly by the 10y swap spread, which remains a manual field. Mechanically unwinds when inventory clears - this is not a view about America. [I]' },
+            { r: 6, t: 'Positioning and the bandwagon', tone: 'bull-green' as Tone, d: 'Listed last by evidentiary support and first by reversal speed. The only component that can vanish in a week with no news, which is exactly why it is the one nobody models. [I]' },
           ].map((x) => (
             <div key={x.r} className="bg-terminal-bg rounded p-3 border border-terminal-border">
               <div className={`text-[10px] font-bold ${TONE[x.tone].text} mb-1`}>{x.r}. {x.t.toUpperCase()}</div>
@@ -444,7 +451,7 @@ function Bar({ label, bp, total, color }: { label: string; bp: number; total: nu
   const pct = total === 0 ? 0 : Math.abs(bp / total) * 100;
   return (
     <div className="flex items-center gap-2 mb-1">
-      <div className="w-36 shrink-0 text-[10px] text-terminal-muted">{label}</div>
+      <div className="w-40 shrink-0 text-[10px] text-terminal-muted">{label}</div>
       <div className="flex-1 h-4 bg-terminal-bg rounded overflow-hidden border border-terminal-border">
         <div className={`h-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
@@ -457,13 +464,14 @@ function Bar({ label, bp, total, color }: { label: string; bp: number; total: nu
 
 // ============================================================ SCENARIOS ====
 
-function ScenariosTab() {
+function ScenariosTab({ v }: { v: View }) {
   const [active, setActive] = useState<'A' | 'B' | 'C' | 'D'>('A');
   const s = scenarios[active];
+  const rows = v.paths[active];
   const soWhat = { A: soWhat_Part2, B: soWhat_Part3, C: soWhat_Part4, D: soWhat_ScenarioD }[active];
 
-  const startRegime = classifyRegime(s.path[0], s.path[1]);
-  const fullRegime = classifyRegime(s.path[0], s.path[s.path.length - 1]);
+  const startRegime = classifyRegime(rows[0], rows[1]);
+  const fullRegime = classifyRegime(rows[0], rows[rows.length - 1]);
 
   return (
     <div className="space-y-4">
@@ -473,7 +481,7 @@ function ScenariosTab() {
           return (
             <button
               key={sc.key}
-              onClick={() => setActive(sc.key)}
+              onClick={() => setActive(sc.key as 'A' | 'B' | 'C' | 'D')}
               className={`panel p-3 text-left transition-all ${
                 active === sc.key ? 'border-terminal-accent ring-1 ring-terminal-accent' : 'hover:border-terminal-muted'
               }`}
@@ -500,9 +508,7 @@ function ScenariosTab() {
       <div className="panel">
         <div className="panel-header flex items-center justify-between flex-wrap gap-2">
           <span><span className="text-terminal-accent">SCENARIO {s.key}:</span> {s.name} &mdash; {s.subtitle}</span>
-          <span className="text-terminal-accent font-bold">
-            {s.probability}% (prior {s.priorProbability}%)
-          </span>
+          <span className="text-terminal-accent font-bold">{s.probability}% (prior {s.priorProbability}%)</span>
         </div>
         <div className="p-4 space-y-4 text-sm">
           <p className="leading-relaxed">{s.definition}</p>
@@ -510,11 +516,11 @@ function ScenariosTab() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CurveChart
               rows={[
-                { label: 'Today', row: s.path[0] },
-                { label: 'Month 3', row: s.path[2], color: '#3b82f6' },
-                { label: 'Month 6', row: s.path[3], color: '#10b981' },
+                { label: 'Today', row: rows[0] },
+                { label: 'Month 3', row: rows[2], color: '#3b82f6' },
+                { label: 'Month 6', row: rows[3], color: '#10b981' },
               ]}
-              title={`Scenario ${s.key} curve path`}
+              title={`Scenario ${s.key} curve path, rebased to the live anchor`}
             />
             <div className="space-y-2">
               <div className="bg-terminal-bg border border-terminal-border rounded p-3">
@@ -528,8 +534,8 @@ function ScenariosTab() {
                   </div>
                 </div>
                 <p className="text-[10px] text-terminal-muted mt-2">
-                  Where these two disagree, the scenario contains a handover and the curveShape text
-                  below has to explain the staging. Scenario C is the clearest case.
+                  Where these two disagree the scenario contains a handover and the curve-shape text has to stage it.
+                  Scenario C is the clearest case.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -547,19 +553,19 @@ function ScenariosTab() {
 
           <div>
             <h4 className="text-[10px] font-bold text-terminal-muted uppercase tracking-wider mb-2">
-              Path table &mdash; spreads DERIVED from the yields, never typed
+              Path table &mdash; stored as bp DELTAS, materialised against today&rsquo;s live curve, spreads derived
             </h4>
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Period</th><th>Fed funds</th><th>2y</th><th>5y</th><th>10y</th><th>30y</th>
-                    <th>2s10s</th><th>5s30s</th><th>ACM TP</th><th>10y swap spr</th>
+                    <th>2s10s</th><th>5s30s</th><th>Term prem</th><th>Swap spr</th>
                     <th>SOFR-IORB</th><th>30y mort</th><th>IG OAS</th><th>HY OAS</th><th>MOVE</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {s.path.map((r) => {
+                  {rows.map((r) => {
                     const sp = spreads(r);
                     return (
                       <tr key={r.label} className={r.monthsAhead === 0 ? 'bg-terminal-accent/5' : ''}>
@@ -571,7 +577,7 @@ function ScenariosTab() {
                         <td className="font-mono">{r.y30.toFixed(2)}</td>
                         <td className="font-mono text-terminal-accent">{sp.s2s10 > 0 ? '+' : ''}{sp.s2s10}</td>
                         <td className="font-mono text-terminal-accent">{sp.s5s30 > 0 ? '+' : ''}{sp.s5s30}</td>
-                        <td className="font-mono">{r.acmTermPremium}</td>
+                        <td className="font-mono">{r.termPremium}</td>
                         <td className="font-mono">{r.swapSpread10y}</td>
                         <td className="font-mono">{r.sofrMinusIorb}</td>
                         <td className="font-mono">{r.mortgage30y.toFixed(2)}</td>
@@ -647,10 +653,9 @@ function PolicyTab() {
         <div className="panel-header text-terminal-accent">THE TOOLKIT LADDER &mdash; IN THE ORDER IT ACTUALLY GETS USED</div>
         <div className="p-4 space-y-3">
           <p className="text-xs text-terminal-muted leading-relaxed">
-            The ordering matters more than the contents. Each rung is chosen because it is cheaper in
-            institutional capital than the one below it, not because it is more effective. Analysts
-            who jump straight to &ldquo;the Fed will do QE&rdquo; skip four rungs that between them
-            resolve most episodes &mdash; and two of those rungs are not even the Fed&rsquo;s to pull.
+            The ordering matters more than the contents. Each rung is cheaper in institutional capital than the one
+            below it, not more effective. Analysts who jump straight to &ldquo;the Fed will do QE&rdquo; skip four rungs
+            that between them resolve most episodes &mdash; and two of those rungs are not even the Fed&rsquo;s to pull.
           </p>
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -698,9 +703,8 @@ function PolicyTab() {
             </div>
           ))}
           <div className="text-[10px] text-terminal-muted italic border-t border-terminal-border pt-2">
-            [S] CLAMP is invented. It does not exist and has not been proposed. The legal reasoning
-            about Section 14(b) and the 1951 Accord is real; the facility is a thought experiment
-            about what the constraint actually is.
+            [S] CLAMP is invented. It does not exist and has not been proposed. The legal reasoning about Section 14(b)
+            and the 1951 Accord is real; the facility is a thought experiment about what the constraint actually is.
           </div>
         </div>
       </div>
@@ -736,10 +740,9 @@ function PolicyTab() {
             ))}
           </div>
           <p className="text-[10px] text-terminal-muted italic">
-            Branch weights are conditional on C having begun and sum to 100. The most useful line on
-            this page is C3 at 18%: a bull flattener that persists rather than handing over to a
-            steepener is the single most under-priced path in the framework, and it is the one that
-            destroys a book positioned for the easing cycle.
+            Branch weights are conditional on C having begun and sum to 100. The most useful line is C3: a bull flattener
+            that persists rather than handing over to a steepener is the most under-priced path in the framework, and the
+            one that destroys a book positioned for the easing cycle.
           </p>
         </div>
       </div>
@@ -759,20 +762,19 @@ function SynthesisTab() {
         <div className="panel-header">SCENARIO SCORECARD &mdash; DECISION RULES, NOT OBSERVATIONS</div>
         <div className="p-4 space-y-2">
           <p className="text-[11px] text-terminal-muted">
-            Each rule states the probability shift in percentage points. v1 listed thresholds without
-            consequences, which cannot be checked against the tape afterwards. These can.
+            Each rule states the probability shift in percentage points, so it can be checked against the tape
+            afterwards. Live levels for these indicators are on the Dashboard and Data Feed tabs.
           </p>
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
-                <tr><th>Indicator</th><th>Weight</th><th>Current</th><th>Decision rules</th><th>Next print</th></tr>
+                <tr><th>Indicator</th><th>Weight</th><th>Decision rules</th><th>Next print</th></tr>
               </thead>
               <tbody>
                 {scorecard.map((r) => (
                   <tr key={r.indicator}>
                     <td className="font-semibold text-terminal-text">{r.indicator}</td>
                     <td><span className={`signal-badge ${r.weight === 'High' ? 'signal-bearish' : 'signal-neutral'}`}>{r.weight}</span></td>
-                    <td className="font-mono text-[10px]">{r.current}</td>
                     <td>
                       <div className="space-y-1">
                         {r.rules.map((rule, i) => (
@@ -795,9 +797,8 @@ function SynthesisTab() {
         <div className="panel-header">THE BOOK &mdash; EVERY EXPRESSION WITH ITS ASYMMETRY STATED</div>
         <div className="p-4 space-y-3">
           <p className="text-[11px] text-terminal-muted">
-            Illustrative. Units are bp of the traded spread for linear trades and bp of premium for
-            option structures, stated per trade because mixing them silently makes a reward-to-risk
-            ratio arithmetically meaningless.
+            Illustrative. Units are bp of the traded spread for linear trades and bp of premium for option structures,
+            stated per trade because mixing them silently makes a reward-to-risk ratio arithmetically meaningless.
           </p>
           {trades.map((t) => {
             const rr = t.targetBp / t.stopBp;
@@ -847,7 +848,7 @@ function SynthesisTab() {
       </div>
 
       <div className="panel">
-        <div className="panel-header">WATCHLIST &mdash; NEXT SIX WEEKS</div>
+        <div className="panel-header">WATCHLIST</div>
         <div className="p-4 overflow-x-auto">
           <table className="data-table">
             <thead><tr><th>Date</th><th>Event</th><th>Weight</th><th>What would change the view</th></tr></thead>
@@ -856,7 +857,7 @@ function SynthesisTab() {
                 <tr key={w.date + w.event} className={w.weight === 'CRITICAL' ? 'bg-terminal-accent/5' : ''}>
                   <td className="font-mono text-terminal-accent whitespace-nowrap">{w.date}</td>
                   <td className="font-semibold text-terminal-text">{w.event}</td>
-                  <td><span className={`signal-badge ${w.weight === 'CRITICAL' ? 'signal-bearish' : w.weight === 'HIGH' ? 'signal-neutral' : 'signal-neutral'}`}>{w.weight}</span></td>
+                  <td><span className={`signal-badge ${w.weight === 'CRITICAL' ? 'signal-bearish' : 'signal-neutral'}`}>{w.weight}</span></td>
                   <td className="text-[10px] text-terminal-muted">{w.impact}</td>
                 </tr>
               ))}
@@ -903,6 +904,10 @@ function InstitutionTab() {
               ))}
             </tbody>
           </table>
+          <p className="text-[10px] text-terminal-muted mt-2">
+            The &ldquo;current&rdquo; column describes an illustrative institution and is not fetched. It is a worked
+            example of how the scenarios land on a specific balance sheet, not a claim about any real bank.
+          </p>
         </div>
       </div>
 
@@ -910,8 +915,7 @@ function InstitutionTab() {
         <div className="panel-header">ACTIONS &mdash; WITH TRIGGER, OWNER, LEAD TIME AND COST</div>
         <div className="p-4 space-y-2">
           <p className="text-[11px] text-terminal-muted">
-            v1 listed five actions with a priority label and nothing else. An action without an owner
-            and a lead time is a wish. Note that three of these have a trigger of &ldquo;now&rdquo;:
+            An action without an owner and a lead time is a wish. Three of these have a trigger of &ldquo;now&rdquo;:
             the cheapest insurance is always the insurance bought while nobody wants it.
           </p>
           {treasuryActions.map((a) => (
@@ -1008,13 +1012,103 @@ function ExoticTab() {
   );
 }
 
-// ============================================================== SOURCES ====
+// ============================================================= DATA FEED ===
 
-function SourcesTab() {
+function DataTab({ v, status, detail }: { v: View; status: SnapshotStatus; detail: string }) {
+  const { snap } = v;
+  const series = Object.entries(snap.series).sort((a, b) => a[0].localeCompare(b[0]));
+
   return (
     <div className="space-y-4">
       <div className="panel">
-        <div className="panel-header">SOURCES &mdash; EVERY [D] TAG ON THIS PAGE RESOLVES HERE</div>
+        <div className="panel-header">PIPELINE STATUS</div>
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { k: 'Snapshot generated', v: `${snap.generatedAt.slice(0, 16).replace('T', ' ')}Z` },
+              { k: 'Series fetched', v: String(Object.keys(snap.series).length) },
+              { k: 'Auctions fetched', v: String(snap.auctions.length) },
+              { k: 'Fetch failures', v: String(snap.failures.length) },
+              { k: 'Manual fields', v: String(snap.manualFields.length) },
+            ].map((m) => (
+              <div key={m.k} className="bg-terminal-bg border border-terminal-border rounded p-3">
+                <div className="text-[10px] text-terminal-muted">{m.k}</div>
+                <div className="text-sm font-bold font-mono text-terminal-accent">{m.v}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-terminal-muted"><StatusPill status={status} /> &nbsp;{detail}</p>
+          <p className="text-[11px] text-terminal-muted leading-relaxed">
+            The pipeline runs <code>scripts/fetch-snapshot.mjs</code> against free, keyless public endpoints &mdash;
+            FRED, the NY Fed reference-rates API, Treasury Fiscal Data and TreasuryDirect. It refuses to write a
+            snapshot if the curve is missing or if more than 40% of sources fail, because keeping yesterday&rsquo;s data
+            and saying so is strictly better than publishing a page with an empty anchor.
+          </p>
+        </div>
+      </div>
+
+      <div className="panel border-neutral-amber/40">
+        <div className="panel-header text-neutral-amber">STILL MAINTAINED BY HAND &mdash; WHERE DRIFT RE-ENTERS</div>
+        <div className="p-4 overflow-x-auto">
+          <table className="data-table">
+            <thead><tr><th>Field</th><th>Why it cannot be fetched</th><th>Where to get it</th></tr></thead>
+            <tbody>
+              {snap.manualFields.map((m) => (
+                <tr key={m.key}>
+                  <td className="font-semibold text-neutral-amber">{m.label}</td>
+                  <td className="text-[10px] text-terminal-muted">{m.why}</td>
+                  <td className="text-[10px] text-info-blue break-all">{m.where}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[10px] text-terminal-muted mt-2">
+            Every row here is a place where the previous failure can recur: a number typed by a human, ageing quietly
+            behind a source citation. They are listed rather than hidden precisely for that reason.
+          </p>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">SERIES REGISTER &mdash; {series.length} FETCHED</div>
+        <div className="p-4 overflow-x-auto">
+          <table className="data-table">
+            <thead><tr><th>Key</th><th>Label</th><th>Value</th><th>Tag</th><th>As of</th><th>Age</th><th>Limit</th><th>Source</th></tr></thead>
+            <tbody>
+              {series.map(([k, o]) => {
+                const age = ageDays(o.asOf, snap.asOfDate);
+                const stale = isStale(o, snap.asOfDate);
+                return (
+                  <tr key={k} className={stale ? 'bg-neutral-amber/10' : ''}>
+                    <td className="font-mono text-[10px] text-terminal-text">{k}</td>
+                    <td className="text-[10px] text-terminal-muted">{o.label}</td>
+                    <td className="font-mono text-terminal-accent">{o.value}</td>
+                    <td className="text-[10px]">[{o.tag}]</td>
+                    <td className="font-mono text-[10px]">{o.asOf}</td>
+                    <td className={`font-mono text-[10px] ${stale ? 'text-neutral-amber font-bold' : ''}`}>{age}d</td>
+                    <td className="font-mono text-[10px] text-terminal-muted">
+                      {o.staleAfterDays}d{o.periodDated ? ' *' : ''}
+                    </td>
+                    <td className="text-[10px] text-terminal-muted">
+                      {o.sourceUrl
+                        ? <a href={o.sourceUrl} target="_blank" rel="noreferrer" className="text-info-blue hover:underline">{o.source}</a>
+                        : o.source}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="text-[10px] text-terminal-muted mt-2">
+            * Period-dated. FRED stamps a monthly or quarterly observation to the START of the period it describes, so
+            a July figure published in late August arrives already two months &ldquo;old&rdquo;. Their limits cover
+            period length plus publication lag; they are not evidence that anybody forgot to refresh.
+          </p>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">SOURCES</div>
         <div className="p-4 overflow-x-auto">
           <table className="data-table">
             <thead><tr><th>Key</th><th>Source</th><th>Cadence</th></tr></thead>
@@ -1022,42 +1116,10 @@ function SourcesTab() {
               {SOURCES.map((s) => (
                 <tr key={s.key}>
                   <td className="font-mono text-terminal-accent text-[10px]">{s.key}</td>
-                  <td>
-                    <a href={s.url} target="_blank" rel="noreferrer" className="text-info-blue hover:underline text-[11px]">
-                      {s.title}
-                    </a>
-                  </td>
+                  <td><a href={s.url} target="_blank" rel="noreferrer" className="text-info-blue hover:underline text-[11px]">{s.title}</a></td>
                   <td className="text-[10px] text-terminal-muted">{s.cadence}</td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">OBSERVATION REGISTER &mdash; PROVENANCE AND STALENESS</div>
-        <div className="p-4 overflow-x-auto">
-          <table className="data-table">
-            <thead><tr><th>Key</th><th>Value</th><th>Tag</th><th>As of</th><th>Source</th><th>Stale after</th><th>Note</th></tr></thead>
-            <tbody>
-              {Object.entries(observations).map(([k, o]) => {
-                const age = (new Date(runSettings.asOfDate).getTime() - new Date(o.asOf).getTime()) / 86400000;
-                const stale = o.tag === 'D' && age > o.staleAfterDays;
-                return (
-                  <tr key={k} className={stale ? 'bg-neutral-amber/10' : ''}>
-                    <td className="font-mono text-[10px] text-terminal-text">{k}</td>
-                    <td className="font-mono text-terminal-accent">{o.value}</td>
-                    <td className="text-[10px]">[{o.tag}]</td>
-                    <td className="font-mono text-[10px]">{o.asOf}</td>
-                    <td className="text-[10px] text-terminal-muted">{o.source}</td>
-                    <td className={`text-[10px] ${stale ? 'text-neutral-amber font-bold' : 'text-terminal-muted'}`}>
-                      {o.staleAfterDays}d {stale ? `· STALE (${Math.round(age)}d)` : ''}
-                    </td>
-                    <td className="text-[10px] text-terminal-muted">{o.note ?? ''}</td>
-                  </tr>
-                );
-              })}
             </tbody>
           </table>
         </div>

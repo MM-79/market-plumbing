@@ -11,7 +11,9 @@
 // rather than hiding them behind a green tick.
 // ============================================================================
 
-import type { Observation, Scenario, TradeExpression } from '../types/framework';
+import type { PathRow, Scenario, TradeExpression } from '../types/framework';
+import type { Snapshot } from './snapshot';
+import { ageDays, isStale } from './snapshot';
 import { decompositionCheck, spreads, type TenYearDecomposition } from './curve';
 
 export type Severity = 'FAIL' | 'WARN' | 'PASS';
@@ -68,12 +70,15 @@ export function auditProbabilities(scenarios: Scenario[]): AuditResult[] {
  * its par-curve panel carried a pre-FOMC 10y of 4.96 while the anchor said
  * 5.14, and three of twelve path rows silently rendered a blank 5s30s.
  */
-export function auditPaths(scenarios: Scenario[], anchor: { y2: number; y5: number; y10: number; y30: number }): AuditResult[] {
+export function auditPaths(
+  materialised: { key: string; rows: PathRow[] }[],
+  anchor: { y2: number; y5: number; y10: number; y30: number },
+): AuditResult[] {
   const out: AuditResult[] = [];
   const tol = 0.005;
 
-  for (const s of scenarios) {
-    const t0 = s.path.find((r) => r.monthsAhead === 0);
+  for (const s of materialised) {
+    const t0 = s.rows.find((r) => r.monthsAhead === 0);
     if (!t0) {
       out.push({
         id: `path-t0-${s.key}`, check: `Scenario ${s.key} path starts at today`,
@@ -97,7 +102,7 @@ export function auditPaths(scenarios: Scenario[], anchor: { y2: number; y5: numb
           'Leviathan 3.4 - paths start from verified levels'));
 
     // Monotone ordering of the horizon.
-    const months = s.path.map((r) => r.monthsAhead);
+    const months = s.rows.map((r) => r.monthsAhead);
     const sorted = [...months].sort((a, b) => a - b);
     if (months.join() !== sorted.join()) {
       out.push({
@@ -110,7 +115,7 @@ export function auditPaths(scenarios: Scenario[], anchor: { y2: number; y5: numb
     // Curve inversion sanity: flag any row where 30y prints through 2y by more
     // than 100bp, which would be a deeply inverted long end and needs saying
     // out loud rather than appearing quietly in a table.
-    for (const r of s.path) {
+    for (const r of s.rows) {
       const sp = spreads(r);
       if (sp.s2s30 < -100) {
         out.push({
@@ -146,34 +151,106 @@ export function auditDecompositions(decomps: TenYearDecomposition[]): AuditResul
   });
 }
 
-// ------------------------------------------------------------- provenance ---
+// --------------------------------------------------------- data pipeline ---
 
-export function auditProvenance(obs: Record<string, Observation>, asOfDate: string): AuditResult[] {
-  const runDate = new Date(asOfDate + 'T00:00:00Z').getTime();
-  const stale: string[] = [];
-  const undated: string[] = [];
-
-  for (const [k, o] of Object.entries(obs)) {
-    if (!o.asOf || !o.source) { undated.push(k); continue; }
-    const ageDays = (runDate - new Date(o.asOf + 'T00:00:00Z').getTime()) / 86_400_000;
-    if (o.tag === 'D' && ageDays > o.staleAfterDays) {
-      stale.push(`${k} (${Math.round(ageDays)}d old, limit ${o.staleAfterDays}d)`);
-    }
-  }
-
+/**
+ * The refresh pipeline auditing itself.
+ *
+ * This replaces v3.0's provenance check, which verified that hand-typed
+ * observations carried a source and a date. They all did. They were also all
+ * wrong, because a citation is not a measurement - the 10y was out by 18bp and
+ * ON RRP by two orders of magnitude, each with an immaculate source key beside
+ * it. Checking that a number has a source is worth nothing if nobody ever
+ * fetched it. These checks verify the fetch.
+ */
+export function auditPipeline(snap: Snapshot): AuditResult[] {
   const out: AuditResult[] = [];
-  out.push(undated.length
-    ? { id: 'prov-tagged', check: 'Every observation carries source and date', severity: 'FAIL',
-        detail: `Missing provenance: ${undated.join(', ')}.`, clause: 'Leviathan 3.1-3.3' }
-    : ok('prov-tagged', 'Every observation carries source and date',
-        `${Object.keys(obs).length} observations, all sourced and dated.`, 'Leviathan 3.1-3.3'));
+  const clause = 'v3.1 - data is fetched, not typed';
 
-  out.push(stale.length
-    ? { id: 'prov-stale', check: 'No [D] observation past its staleness limit', severity: 'WARN',
-        detail: `Stale: ${stale.join('; ')}. Re-pull before quoting, or re-tag as [E].`, clause: 'Leviathan 3.3' }
-    : ok('prov-stale', 'No [D] observation past its staleness limit',
-        'All hard data inside its refresh window.', 'Leviathan 3.3'));
+  // 1. Did the fetch succeed?
+  out.push(snap.failures.length === 0
+    ? ok('pipe-fetch', 'All automated sources fetched cleanly',
+        `${Object.keys(snap.series).length} series and ${snap.auctions.length} auctions retrieved with no failures.`, clause)
+    : {
+        id: 'pipe-fetch', check: 'All automated sources fetched cleanly',
+        severity: snap.failures.length > 3 ? 'FAIL' : 'WARN',
+        detail: `${snap.failures.length} source(s) failed: ${snap.failures.map((f) => `${f.key} (${f.reason})`).join('; ')}.`,
+        clause,
+      });
+
+  // 2. How old is the snapshot itself? A pipeline that stops running is the
+  //    main way an auto-refreshing framework fails, and it fails silently.
+  const snapAge = Math.round((Date.now() - Date.parse(snap.generatedAt)) / 86_400_000);
+  out.push(snapAge <= 4
+    ? ok('pipe-age', 'Snapshot generated recently',
+        `Generated ${snap.generatedAt.slice(0, 10)}, ${snapAge} day(s) ago.`, clause)
+    : {
+        id: 'pipe-age', check: 'Snapshot generated recently',
+        severity: snapAge > 10 ? 'FAIL' : 'WARN',
+        detail: `Snapshot is ${snapAge} days old (generated ${snap.generatedAt.slice(0, 10)}). `
+          + 'The scheduled refresh may have stopped running. Check the workflow before trusting anything on this page.',
+        clause,
+      });
+
+  // 3. Series past their own staleness limits, separating the two causes.
+  const genuinelyStale: string[] = [];
+  const periodDated: string[] = [];
+  for (const [k, ser] of Object.entries(snap.series)) {
+    if (!isStale(ser, snap.asOfDate)) continue;
+    const line = `${k} (${ageDays(ser.asOf, snap.asOfDate)}d)`;
+    (ser.periodDated ? periodDated : genuinelyStale).push(line);
+  }
+  out.push(genuinelyStale.length === 0
+    ? ok('pipe-stale', 'No high-frequency series past its staleness limit',
+        periodDated.length
+          ? `${periodDated.length} monthly/quarterly series are past their limit awaiting the next release: ${periodDated.join(', ')}. That is upstream cadence, not a pipeline failure.`
+          : 'Every series inside its refresh window.', clause)
+    : {
+        id: 'pipe-stale', check: 'No high-frequency series past its staleness limit',
+        severity: 'WARN',
+        detail: `Stale: ${genuinelyStale.join(', ')}. These are daily or weekly series that should have refreshed and have not.`,
+        clause,
+      });
+
+  // 4. Manual fields. Not a failing - some data genuinely has no free feed -
+  //    but they must be visible, because they are where drift re-enters.
+  out.push({
+    id: 'pipe-manual', check: 'Manual fields are declared, not hidden',
+    severity: 'WARN',
+    detail: `${snap.manualFields.length} field(s) have no free machine-readable feed and are maintained by hand: `
+      + `${snap.manualFields.map((m) => m.label).join(', ')}. Every one is a place where the v3.0 failure can recur.`,
+    clause,
+  });
+
   return out;
+}
+
+/**
+ * The two-clock check, and the most important addition in v3.1.
+ *
+ * Data refreshing automatically is only an improvement if the reasoning keeps
+ * up with it. If it does not, the framework acquires the worst possible
+ * property: confident prose, freshly timestamped numbers, and no relationship
+ * between them. This compares the date a human last re-reasoned the narrative
+ * against the date of the data on screen.
+ */
+export function auditNarrativeFreshness(narrativeReviewedOn: string, snap: Snapshot): AuditResult[] {
+  const gap = Math.round((Date.parse(snap.asOfDate) - Date.parse(narrativeReviewedOn)) / 86_400_000);
+  const clause = 'v3.1 - the two-clock rule';
+
+  if (gap <= 10) {
+    return [ok('narr-fresh', 'Narrative reviewed against current data',
+      `Prose last re-reasoned ${narrativeReviewedOn}; data as of ${snap.asOfDate} (${gap} day gap).`, clause)];
+  }
+  return [{
+    id: 'narr-fresh',
+    check: 'Narrative reviewed against current data',
+    severity: gap > 45 ? 'FAIL' : 'WARN',
+    detail: `The numbers refreshed on ${snap.asOfDate}. The analysis was last reasoned on ${narrativeReviewedOn}, `
+      + `${gap} days earlier. Signals, steelmen and scenario probabilities on this page have NOT been checked against `
+      + 'the data now displayed beside them. Treat the prose as a historical document until it is reviewed.',
+    clause,
+  }];
 }
 
 // ----------------------------------------------------------------- trades ---

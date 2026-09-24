@@ -1,0 +1,68 @@
+name: Refresh market snapshot
+
+# The whole point of this repository: the numbers maintain themselves.
+#
+# Runs on weekday evenings US time, after the Treasury par curve (~15:30 ET),
+# the NY Fed reference rates (08:00 ET, prior session) and the FRED daily
+# updates have all landed. Weekends are skipped because nothing publishes.
+on:
+  schedule:
+    - cron: "0 23 * * 1-5"   # 23:00 UTC = 18:00 ET (19:00 during EDT)
+  workflow_dispatch:          # manual trigger, for a refresh on demand
+    inputs:
+      reason:
+        description: "Why you are refreshing out of schedule"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-snapshot
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No npm install. The fetcher has zero dependencies precisely so that
+      # this step cannot break on a transitive package three years from now.
+      - name: Fetch snapshot
+        working-directory: app
+        env:
+          # Optional. Absent, the fetcher uses FRED's public CSV endpoint.
+          # Set it as a repository secret to use the documented JSON API.
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: node scripts/fetch-snapshot.mjs
+
+      - name: Commit if the data moved
+        run: |
+          if [ -z "$(git status --porcelain app/public/data)" ]; then
+            echo "No change in the snapshot. Nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/public/data
+          ASOF=$(node -e "console.log(require('./app/public/data/snapshot.json').asOfDate)")
+          N=$(node -e "console.log(Object.keys(require('./app/public/data/snapshot.json').series).length)")
+          F=$(node -e "console.log(require('./app/public/data/snapshot.json').failures.length)")
+          git commit -m "data: snapshot ${ASOF} (${N} series, ${F} failures)"
+          git push
+
+      # A failed fetch is silent otherwise, and a pipeline that stops running
+      # without telling anyone is the main way a self-refreshing framework
+      # quietly becomes a historical document.
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "::error::Snapshot refresh failed. The app will keep serving the last good"
+          echo "::error::snapshot and its self-check will flag the snapshot age. Investigate"
+          echo "::error::before trusting the page."

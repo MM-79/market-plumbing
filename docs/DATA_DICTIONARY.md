@@ -24,23 +24,57 @@ defended.
 
 ## `types/framework.ts`
 
-### `Observation`
-The provenance wrapper. Any scalar the framework leans on should be one.
+### `Series` (in `lib/snapshot.ts`)
+
+Replaces v3.0's hand-maintained `Observation`. Every one of these is written by
+the fetcher, never by a human.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `value` | number | The number. |
-| `unit` | enum | `pct` \| `bp` \| `usd_bn` \| `usd_tn` \| `index` \| `ratio` \| `count` |
-| `tag` | `D`/`E`/`I`/`S` | Evidence class. See METHODOLOGY §2. |
-| `asOf` | ISO date | Date of the observation itself. |
-| `source` | string | Key into `SOURCES`. Must resolve or the audit fails. |
-| `staleAfterDays` | number | Max age before the UI flags it. Set from the series' own cadence plus its publication lag — daily market data gets 2–4, weekly gets 9–10, monthly gets 40–45, quarterly gets 60+. |
-| `note` | string? | Anything a reader would otherwise have to ask about. |
+| `value` | number | The fetched value, already converted into the framework's unit. |
+| `unit` | string | `pct` \| `bp` \| `usd_bn` \| `usd_tn` \| `index` \| `count` \| `ratio` |
+| `tag` | `D`/`E`/`I`/`S` | `D` for fetched, `E` for derived from fetched series. |
+| `asOf` | ISO date | The observation's own date, as published. |
+| `source` | string | e.g. `fred:DGS10`, `nyfed:reference-rates`, `derived(a+b)`. |
+| `sourceUrl` | string? | Deep link, rendered in the Data Feed tab. |
+| `staleAfterDays` | number | See below. |
+| `periodDated` | boolean | True for monthly/quarterly series. See below. |
+| `history` | array? | Retained observations. 520 points for the eight series the decompositions are computed from, 40 for the rest. |
 
-### `PathRow`
-One row of a scenario path table.
+**`staleAfterDays` and the period-dating trap.** Daily market data gets 4 (covers
+a long weekend), weekly gets 10. Monthly and quarterly need care: **FRED dates a
+periodic observation to the START of the period it describes.** July core PCE,
+published in late August, carries `asOf: 2026-07-01` and is already ~55 days
+"old" the day it lands. Without accounting for this, roughly a third of the
+pipeline reports itself permanently stale. Those series carry
+`periodDated: true` and thresholds covering period length + publication lag:
+70-75 days monthly, 220 quarterly. The UI marks them with `*` and explains the
+gap rather than implying somebody forgot to refresh.
 
-**Design note: this type deliberately has no spread fields.** `2s10s` and
+### `MANUAL_VALUES` (in `data/marketData.ts`)
+
+The seven fields with no free machine-readable feed, each with the date it was
+last entered by hand so it can age exactly like a fetched series. Listed in the
+UI with the reason, because every one is a place where the v3.0 failure - a
+number typed by a human, ageing quietly behind a source citation - can recur.
+
+### `PathRow` / `PathDelta`
+
+**`PathDelta` is what an analyst writes; `PathRow` is what the app renders.**
+
+A scenario is a view about CHANGE - "the long end sells off 50bp and the front
+does not follow" - and that view survives the market moving underneath it.
+`PathDelta` stores bp changes from today; `materialisePath()` applies them to
+the live anchor to produce `PathRow`. v3.0 stored absolute levels drawn against
+a 5.14% 10y, and when the tape turned out to be at 4.96% all four scenarios were
+describing a market that did not exist. Deltas rebase themselves on every
+refresh, so the `Today` row equals the live anchor by construction.
+
+Two fields stay absolute on purpose: `fedFundsLow/High`, because that is a view
+about a policy level rather than a drift; and `move`, because the MOVE index has
+no free feed and therefore no live base to apply a delta to.
+
+**Both types deliberately have no spread fields.** `2s10s` and
 `5s30s` are computed from `y2/y5/y10/y30` by `spreads()` at render time. v1
 stored them as strings, mistyped the key on three of twelve rows (`s5s30s`
 instead of `s5s30`), and rendered blank cells that nobody noticed. A spread that
@@ -50,8 +84,8 @@ cannot be stored cannot disagree with the yields it comes from.
 |---|---|---|
 | `monthsAhead` | `0 \| 1 \| 3 \| 6` | `0` must equal the anchor. Audited. |
 | `fedFundsLow/High` | pct | Target range bounds. Mid is derived. |
-| `y2`, `y5`, `y10`, `y30` | pct | `y5` was absent in v1 while 5s30s was quoted. |
-| `acmTermPremium` | bp | ACM 10y. |
+| `y2`, `y5`, `y10`, `y30` | pct | On `PathDelta` these are `dy2`/`dy5`/`dy10`/`dy30`, in bp from today. |
+| `termPremium` | bp | Kim-Wright 10y (live). ACM is manual and shown beside it. |
 | `swapSpread10y` | bp | Negative = swaps through Treasuries. |
 | `sofrMinusIorb` | bp | |
 | `mortgage30y` | pct | PMMS basis. |
@@ -94,8 +128,11 @@ two years of policy, which is the one part of the path nobody disputes.
 Par-bond closed form, `Dmod = (1/y)(1 − (1+y/2)^(−2n))`, returned in dollars per
 $1mm notional.
 
-Sanity anchors at the current curve: 5y at 4.84% → $440; 10y at 5.14% → $774;
-30y at 5.34% → $1,487. If a code change moves these, the change is wrong.
+Sanity anchors, checkable against the Dashboard's derived-analytics panel:
+a 10y near 5% gives roughly $780/mm and a 30y near 5.3% roughly $1,495/mm, with
+the 30y carrying about 3.4x the risk per million of the 5y. Because the panel
+computes these from the live curve, a code change that breaks the formula shows
+up immediately as a tile that disagrees with these magnitudes.
 
 ### `classifyRegime(start, end, thresholdBp = 3)`
 Names the curve regime from the move rather than accepting an assertion.
@@ -160,15 +197,24 @@ of 3.2% of GDP is not, and should not be quoted to one decimal.
 
 ## `data/marketData.ts`
 
-`observations` is the provenance register. Anything in it appears on the Sources
-tab with its age and staleness state.
+Nothing in this file holds a market number any more. It holds the narrative -
+layer signals, steelmen, flips-on conditions - plus `MANUAL_VALUES` and
+`buildLayers(snapshot)`, which interpolates live figures into the prose so a
+sentence quoting a level cannot drift away from the level it quotes.
+
+`runSettings.narrativeReviewedOn` is the date a human last re-reasoned that
+prose. `auditNarrativeFreshness` compares it against the data date and warns at
+a 10-day gap, failing at 45.
 
 Layer `metrics[]` entries are display strings with a tag and are **not** audited
 for provenance — they are too heterogeneous to type usefully. The rule is that
 any figure a downstream calculation depends on must also exist in `observations`.
 Layer metrics that are purely narrative do not.
 
-`decompositions[]` must satisfy, per window:
+The decompositions are computed by `buildDecompositions()` from published
+series - term premium from the Kim-Wright delta, real yield from the TIPS delta,
+each residual closing its own view - so they satisfy, per window, by
+construction:
 `expectedPathBp + termPremiumBp = total` **and**
 `realYieldBp + breakevenBp = total`, each within 3bp.
 
