@@ -110,20 +110,27 @@ function SoWhatSection({ data, partTitle }: SoWhatSectionProps) {
           </h4>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {data.caps.map((cap, i) => {
-              const capColor = cap.cap === 'Small Cap' ? 'bear-red' : cap.cap === 'Mid Cap' ? 'neutral-amber' : 'bull-green';
-              const capIdx = cap.cap === 'Small Cap' ? 'RUT' : cap.cap === 'Mid Cap' ? 'MDY' : 'SPY';
+              // Literal class strings only. Tailwind v4 scans source text for
+              // class names and never emits a class assembled as `text-${x}`,
+              // so the v1 version of this block rendered every cap card
+              // borderless and colourless without erroring.
+              const cap_ = cap.cap === 'Small Cap'
+                ? { border: 'border-bear-red/30', text: 'text-bear-red', tint: 'bg-bear-red/10', idx: 'RUT' }
+                : cap.cap === 'Mid Cap'
+                ? { border: 'border-neutral-amber/30', text: 'text-neutral-amber', tint: 'bg-neutral-amber/10', idx: 'MDY' }
+                : { border: 'border-bull-green/30', text: 'text-bull-green', tint: 'bg-bull-green/10', idx: 'SPY' };
               return (
-                <div key={i} className={`bg-terminal-bg rounded p-4 border border-${capColor}/30`}>
+                <div key={i} className={`bg-terminal-bg rounded p-4 border ${cap_.border}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <span className={`text-xs font-bold text-${capColor}`}>{cap.cap}</span>
+                      <span className={`text-xs font-bold ${cap_.text}`}>{cap.cap}</span>
                       <span className="text-[10px] text-terminal-muted ml-2">({cap.index})</span>
                     </div>
-                    <span className={`text-[10px] font-mono text-${capColor} bg-${capColor}/10 px-1.5 py-0.5 rounded`}>
-                      {capIdx}
+                    <span className={`text-[10px] font-mono ${cap_.text} ${cap_.tint} px-1.5 py-0.5 rounded`}>
+                      {cap_.idx}
                     </span>
                   </div>
-                  <div className={`text-sm font-bold text-${capColor} mb-2`}>
+                  <div className={`text-sm font-bold ${cap_.text} mb-2`}>
                     {cap.verdict}
                   </div>
                   <p className="text-[11px] text-terminal-muted leading-relaxed mb-3">

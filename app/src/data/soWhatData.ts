@@ -375,3 +375,50 @@ export const soWhat_Appendix: SoWhatData = {
   ],
   summary: 'The exotic signals create sector dispersion: AI infrastructure (tech, utilities, electrical industrials) benefits from data-center power demand; shipping cost inflation hurts goods-heavy sectors (retail, chemicals). The signals don\'t change the macro thesis but they identify stock-level opportunities within sectors. For market cap: large-cap AI infrastructure is the beneficiary; mid-cap electrical suppliers are the hidden winners; small caps are left out. The trade: long large-cap AI infrastructure, long mid-cap electrical suppliers, short small-cap goods producers.',
 };
+
+// ==================== SCENARIO D: THE PAIN TRADE ====================
+// Added in v2. v1 had no equity read for a rally that happens for a good
+// reason, because v1 had no such scenario. The sector map below is deliberately
+// close to the inverse of Part 0 - that is the point of a pain trade.
+export const soWhat_ScenarioD: SoWhatData = {
+  sectors: [
+    { sector: 'Real Estate', ticker: 'XLRE', direction: 'BULLISH', magnitude: 'HIGH', rationale: 'The highest-beta winner and the most under-owned. A 30y at 4.90% takes mortgages toward 6.8% and cap rates stop rising. REITs were a bond proxy on the way down; they are a bond proxy on the way up too, and the sector carries almost no positioning to unwind because everyone already left.' },
+    { sector: 'Utilities', ticker: 'XLU', direction: 'BULLISH', magnitude: 'HIGH', rationale: 'Pure duration in equity clothing. The AI power demand story is intact and was never the reason the sector underperformed - rates were. Remove the rate headwind and both drivers point the same way for the first time in two years.' },
+    { sector: 'Consumer Discretionary', ticker: 'XLY', direction: 'BULLISH', magnitude: 'HIGH', rationale: 'The scenario is a rally with no recession, which is the only configuration in which discretionary works. Auto financing costs fall, the housing-linked complex thaws, and none of it is offset by rising unemployment. The best risk-reward in the sector map, precisely because it requires the least consensus.' },
+    { sector: 'Technology', ticker: 'XLK', direction: 'BULLISH', magnitude: 'MED', rationale: 'A 44bp fall in the 10y real yield is roughly a 6-8% present-value uplift on a long-duration cash flow stream. But note the second-order drag from the cross-asset chain: lower rates mean less interest income redeployed into hyperscaler paper, so the AI capex funding channel narrows slightly. Bullish, with a smaller multiplier than the naive duration math implies.' },
+    { sector: 'Financials', ticker: 'XLF', direction: 'MIXED', magnitude: 'MED', rationale: 'The cleanest split in the map. AOCI relief hands back roughly 25bp of CET1 across the regional complex, which is real and immediate. Against that, a 2s10s at +2bp is a net interest margin problem, and margin is what the market pays for. Own the AOCI-impaired regionals, not the NIM-levered ones.' },
+    { sector: 'Energy', ticker: 'XLE', direction: 'BEARISH', magnitude: 'MED', rationale: 'The mirror image of Part 0. A squeeze-driven rally in duration is usually accompanied by, or triggered by, oil retracing - and if it is not, the inflation compensation supporting energy earnings stays and the rally is smaller than modelled. The natural funding short for this scenario.' },
+    { sector: 'Consumer Staples', ticker: 'XLP', direction: 'BEARISH', magnitude: 'LOW', rationale: 'Underperforms on a relative basis in any risk-on rally. Absolute returns modestly positive; there is simply no reason to own defensives into a squeeze.' },
+    { sector: 'Health Care', ticker: 'XLV', direction: 'NEUTRAL', magnitude: 'LOW', rationale: 'Rate-insensitive both ways. Neither the beneficiary nor the funding source. Trades on its own pipeline.' },
+    { sector: 'Industrials', ticker: 'XLI', direction: 'BULLISH', magnitude: 'MED', rationale: 'Lower financing costs support capex order books, and the electrical infrastructure sub-sector keeps the AI tailwind. Transportation benefits if the rally coincides with lower fuel.' },
+    { sector: 'Materials', ticker: 'XLB', direction: 'NEUTRAL', magnitude: 'LOW', rationale: 'Cross-currents. Lower real rates support commodity pricing; a firmer dollar from a Fed that stays hawkish into the rally works the other way. No clean signal.' },
+    { sector: 'Communication Services', ticker: 'XLC', direction: 'BULLISH', magnitude: 'MED', rationale: 'Duration-sensitive multiples re-rate on the same discount-rate arithmetic as tech, with less exposure to the AI capex funding channel. A cleaner expression of the rate move than XLK.' },
+  ],
+  caps: [
+    {
+      cap: 'Small Cap',
+      index: 'Russell 2000',
+      verdict: 'BULLISH - Highest Beta to the Squeeze',
+      thesis: 'The most levered expression of the scenario and the one nobody is positioned for. Roughly 40% of Russell 2000 debt is floating, so the sector is a direct bet on the front end, and it has been sold for two years on the thesis that cuts are not coming. D does not deliver cuts - it delivers a fall in the LONG end with the front broadly unchanged - which is a smaller benefit than the bulls want but arrives against positioning so one-sided that the move overshoots the fundamentals anyway.',
+      keyRisk: 'The scenario is a long-end rally with the Fed still hiking in December. Floating-rate small-cap borrowers get no relief on their actual coupon. If the market works this out in week two rather than week six, the rally reverses hard and the sector gives back everything.',
+      keyCatalyst: 'Any Fed language acknowledging that easier financial conditions reduce the need for further hikes. That sentence converts a long-end squeeze into a genuine front-end repricing, and it is the only thing that makes this trade work on fundamentals rather than flows.',
+    },
+    {
+      cap: 'Mid Cap',
+      index: 'S&P MidCap 400',
+      verdict: 'BULLISH - Best Risk-Adjusted Expression',
+      thesis: 'Mid caps carry enough rate sensitivity to participate meaningfully and enough balance-sheet quality to survive being wrong. In a scenario driven by positioning rather than fundamentals, survivability while wrong is worth more than beta while right. The median mid-cap at 14x forward re-rates on a falling discount rate without needing any earnings help at all.',
+      keyRisk: 'The perennial one: passive flows concentrate at mega and small, so the middle participates late. A six-week squeeze may end before mid caps have fully re-rated.',
+      keyCatalyst: 'M&A. Falling financing costs restart strategic activity immediately, and mid caps are the acquisition set.',
+    },
+    {
+      cap: 'Large Cap',
+      index: 'S&P 500 (Top 100)',
+      verdict: 'BULLISH - But the Least Interesting',
+      thesis: 'Mega-caps have already re-rated on AI and carry an equity risk premium of -0.8%. A 44bp fall in the 10y mechanically improves that to roughly -0.3%, which removes an objection rather than creating an opportunity. The balance sheets did not need help and the funding costs were locked in years ago. Participation without leverage.',
+      keyRisk: 'Concentration. The top 10 names are 35% of the index, so this is an AI-monetisation bet wearing an index costume regardless of what rates do.',
+      keyCatalyst: 'Nothing rate-related. Large-cap performance in this scenario is decided by earnings, as it has been throughout.',
+    },
+  ],
+  summary: 'The equity map for Scenario D is close to the photographic negative of Part 0, and that is exactly what makes it useful. Everything punished for two years - real estate, utilities, discretionary, small caps - is the beneficiary, and the two sectors that carried the market, energy and mega-cap tech, are respectively the funding short and a lukewarm participant. The practical point for anyone running a book: if your equity positioning is the Part 0 map, you are short this scenario in the equity complex AND in the rates complex at the same time. That is a correlation nobody has on their risk report, because it only shows up in the one state of the world where both books lose together.',
+};
