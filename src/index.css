@@ -1,1 +1,146 @@
 @import "tailwindcss";
+
+@theme {
+  --color-terminal-bg: #0a0e17;
+  --color-terminal-panel: #111827;
+  --color-terminal-border: #1e293b;
+  --color-terminal-text: #e2e8f0;
+  --color-terminal-muted: #64748b;
+  --color-terminal-accent: #f59e0b;
+  --color-bull-green: #10b981;
+  --color-bear-red: #ef4444;
+  --color-neutral-amber: #f59e0b;
+  --color-info-blue: #3b82f6;
+  --color-signal-high: #10b981;
+  --color-signal-med: #f59e0b;
+  --color-signal-low: #6b7280;
+}
+
+body {
+  background-color: #0a0e17;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Blinking cursor effect */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.cursor-blink {
+  animation: blink 1s infinite;
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+}
+.pulse-live {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Table styles */
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.75rem;
+}
+.data-table th {
+  background: #1e293b;
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #94a3b8;
+  border-bottom: 1px solid #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.65rem;
+}
+.data-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #1e293b;
+  white-space: nowrap;
+}
+.data-table tr:hover td {
+  background: #1e293b44;
+}
+
+/* Signal badges */
+.signal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.signal-bullish { background: #10b98122; color: #10b981; border: 1px solid #10b98144; }
+.signal-bearish { background: #ef444422; color: #ef4444; border: 1px solid #ef444444; }
+.signal-neutral { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b44; }
+.signal-unknown { background: #6b728022; color: #6b7280; border: 1px solid #6b728044; }
+
+/* Confidence dots */
+.conf-high { color: #10b981; }
+.conf-med { color: #f59e0b; }
+.conf-low { color: #6b7280; }
+
+/* Tab styles */
+.tab-active {
+  border-bottom: 2px solid #f59e0b;
+  color: #f59e0b;
+}
+.tab-inactive {
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+}
+.tab-inactive:hover {
+  color: #94a3b8;
+  border-bottom-color: #334155;
+}
+
+/* Glow effects */
+.glow-amber {
+  text-shadow: 0 0 10px #f59e0b44;
+}
+.glow-red {
+  text-shadow: 0 0 10px #ef444444;
+}
+.glow-green {
+  text-shadow: 0 0 10px #10b98144;
+}
+
+/* Panel */
+.panel {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+}
+.panel-header {
+  background: #1e293b;
+  padding: 8px 14px;
+  border-bottom: 1px solid #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
