@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "generatedAt": "2026-09-25T01:04:28.379Z",
-  "asOfDate": "2026-09-25",
+  "generatedAt": "2026-09-26T01:05:43.624Z",
+  "asOfDate": "2026-09-26",
   "fredAccess": "public-csv",
   "series": {
     "y2": {
-      "value": 4.85,
-      "asOf": "2026-09-23",
+      "value": 4.87,
+      "asOf": "2026-09-24",
       "source": "fred:DGS2",
       "sourceUrl": "https://fred.stlouisfed.org/series/DGS2",
       "unit": "pct",
@@ -15,10 +15,6 @@
       "periodDated": false,
       "label": "2y par yield",
       "history": [
-        {
-          "date": "2024-08-23",
-          "value": 3.9
-        },
         {
           "date": "2024-08-26",
           "value": 3.91
@@ -2094,13 +2090,17 @@
         {
           "date": "2026-09-23",
           "value": 4.85
+        },
+        {
+          "date": "2026-09-24",
+          "value": 4.87
         }
       ],
       "ageDays": 2
     },
     "y5": {
-      "value": 4.99,
-      "asOf": "2026-09-23",
+      "value": 5.03,
+      "asOf": "2026-09-24",
       "source": "fred:DGS5",
       "sourceUrl": "https://fred.stlouisfed.org/series/DGS5",
       "unit": "pct",
@@ -2109,10 +2109,6 @@
       "periodDated": false,
       "label": "5y par yield",
       "history": [
-        {
-          "date": "2024-08-23",
-          "value": 3.65
-        },
         {
           "date": "2024-08-26",
           "value": 3.66
@@ -4188,13 +4184,17 @@
         {
           "date": "2026-09-23",
           "value": 4.99
+        },
+        {
+          "date": "2026-09-24",
+          "value": 5.03
         }
       ],
       "ageDays": 2
     },
     "y10": {
-      "value": 5.11,
-      "asOf": "2026-09-23",
+      "value": 5.18,
+      "asOf": "2026-09-24",
       "source": "fred:DGS10",
       "sourceUrl": "https://fred.stlouisfed.org/series/DGS10",
       "unit": "pct",
@@ -4203,10 +4203,6 @@
       "periodDated": false,
       "label": "10y par yield",
       "history": [
-        {
-          "date": "2024-08-23",
-          "value": 3.81
-        },
         {
           "date": "2024-08-26",
           "value": 3.82
@@ -6282,13 +6278,17 @@
         {
           "date": "2026-09-23",
           "value": 5.11
+        },
+        {
+          "date": "2026-09-24",
+          "value": 5.18
         }
       ],
       "ageDays": 2
     },
     "y30": {
-      "value": 5.4,
-      "asOf": "2026-09-23",
+      "value": 5.47,
+      "asOf": "2026-09-24",
       "source": "fred:DGS30",
       "sourceUrl": "https://fred.stlouisfed.org/series/DGS30",
       "unit": "pct",
@@ -6297,10 +6297,6 @@
       "periodDated": false,
       "label": "30y par yield",
       "history": [
-        {
-          "date": "2024-08-23",
-          "value": 4.1
-        },
         {
           "date": "2024-08-26",
           "value": 4.11
@@ -8376,13 +8372,17 @@
         {
           "date": "2026-09-23",
           "value": 5.4
+        },
+        {
+          "date": "2026-09-24",
+          "value": 5.47
         }
       ],
       "ageDays": 2
     },
     "y3m": {
-      "value": 4.19,
-      "asOf": "2026-09-23",
+      "value": 4.24,
+      "asOf": "2026-09-24",
       "source": "fred:DGS3MO",
       "sourceUrl": "https://fred.stlouisfed.org/series/DGS3MO",
       "unit": "pct",
@@ -8391,10 +8391,6 @@
       "periodDated": false,
       "label": "3m bill yield",
       "history": [
-        {
-          "date": "2026-07-29",
-          "value": 3.83
-        },
         {
           "date": "2026-07-30",
           "value": 3.82
@@ -8550,13 +8546,17 @@
         {
           "date": "2026-09-23",
           "value": 4.19
+        },
+        {
+          "date": "2026-09-24",
+          "value": 4.24
         }
       ],
       "ageDays": 2
     },
     "tips10y": {
-      "value": 2.76,
-      "asOf": "2026-09-23",
+      "value": 2.85,
+      "asOf": "2026-09-24",
       "source": "fred:DFII10",
       "sourceUrl": "https://fred.stlouisfed.org/series/DFII10",
       "unit": "pct",
@@ -8565,10 +8565,6 @@
       "periodDated": false,
       "label": "10y TIPS real yield",
       "history": [
-        {
-          "date": "2024-08-23",
-          "value": 1.68
-        },
         {
           "date": "2024-08-26",
           "value": 1.67
@@ -10644,13 +10640,17 @@
         {
           "date": "2026-09-23",
           "value": 2.76
+        },
+        {
+          "date": "2026-09-24",
+          "value": 2.85
         }
       ],
       "ageDays": 2
     },
     "tips5y": {
-      "value": 2.65,
-      "asOf": "2026-09-23",
+      "value": 2.7,
+      "asOf": "2026-09-24",
       "source": "fred:DFII5",
       "sourceUrl": "https://fred.stlouisfed.org/series/DFII5",
       "unit": "pct",
@@ -10659,10 +10659,6 @@
       "periodDated": false,
       "label": "5y TIPS real yield",
       "history": [
-        {
-          "date": "2026-07-29",
-          "value": 2.13
-        },
         {
           "date": "2026-07-30",
           "value": 2.14
@@ -10818,13 +10814,17 @@
         {
           "date": "2026-09-23",
           "value": 2.65
+        },
+        {
+          "date": "2026-09-24",
+          "value": 2.7
         }
       ],
       "ageDays": 2
     },
     "bei10y": {
-      "value": 2.33,
-      "asOf": "2026-09-24",
+      "value": 2.34,
+      "asOf": "2026-09-25",
       "source": "fred:T10YIE",
       "sourceUrl": "https://fred.stlouisfed.org/series/T10YIE",
       "unit": "pct",
@@ -10833,10 +10833,6 @@
       "periodDated": false,
       "label": "10y breakeven",
       "history": [
-        {
-          "date": "2024-08-26",
-          "value": 2.15
-        },
         {
           "date": "2024-08-27",
           "value": 2.15
@@ -12912,13 +12908,17 @@
         {
           "date": "2026-09-24",
           "value": 2.33
+        },
+        {
+          "date": "2026-09-25",
+          "value": 2.34
         }
       ],
       "ageDays": 1
     },
     "bei5y5y": {
-      "value": 2.33,
-      "asOf": "2026-09-24",
+      "value": 2.34,
+      "asOf": "2026-09-25",
       "source": "fred:T5YIFR",
       "sourceUrl": "https://fred.stlouisfed.org/series/T5YIFR",
       "unit": "pct",
@@ -12927,10 +12927,6 @@
       "periodDated": false,
       "label": "5y5y forward breakeven",
       "history": [
-        {
-          "date": "2024-08-26",
-          "value": 2.28
-        },
         {
           "date": "2024-08-27",
           "value": 2.28
@@ -15006,13 +15002,17 @@
         {
           "date": "2026-09-24",
           "value": 2.33
+        },
+        {
+          "date": "2026-09-25",
+          "value": 2.34
         }
       ],
       "ageDays": 1
     },
     "effr": {
       "value": 3.88,
-      "asOf": "2026-09-23",
+      "asOf": "2026-09-24",
       "source": "fred:DFF",
       "sourceUrl": "https://fred.stlouisfed.org/series/DFF",
       "unit": "pct",
@@ -15021,10 +15021,6 @@
       "periodDated": false,
       "label": "Effective fed funds",
       "history": [
-        {
-          "date": "2026-08-15",
-          "value": 3.63
-        },
         {
           "date": "2026-08-16",
           "value": 3.63
@@ -15180,13 +15176,17 @@
         {
           "date": "2026-09-23",
           "value": 3.88
+        },
+        {
+          "date": "2026-09-24",
+          "value": 3.88
         }
       ],
       "ageDays": 2
     },
     "iorb": {
       "value": 3.9,
-      "asOf": "2026-09-25",
+      "asOf": "2026-09-28",
       "source": "fred:IORB",
       "sourceUrl": "https://fred.stlouisfed.org/series/IORB",
       "unit": "pct",
@@ -15195,18 +15195,6 @@
       "periodDated": false,
       "label": "Interest on reserve balances",
       "history": [
-        {
-          "date": "2026-08-17",
-          "value": 3.65
-        },
-        {
-          "date": "2026-08-18",
-          "value": 3.65
-        },
-        {
-          "date": "2026-08-19",
-          "value": 3.65
-        },
         {
           "date": "2026-08-20",
           "value": 3.65
@@ -15354,9 +15342,21 @@
         {
           "date": "2026-09-25",
           "value": 3.9
+        },
+        {
+          "date": "2026-09-26",
+          "value": 3.9
+        },
+        {
+          "date": "2026-09-27",
+          "value": 3.9
+        },
+        {
+          "date": "2026-09-28",
+          "value": 3.9
         }
       ],
-      "ageDays": 0
+      "ageDays": -2
     },
     "kimWright10y": {
       "value": 95.95,
@@ -17450,7 +17450,7 @@
           "value": 95.95
         }
       ],
-      "ageDays": 7
+      "ageDays": 8
     },
     "reserves": {
       "value": 2.9302,
@@ -17624,7 +17624,7 @@
           "value": 2.9302
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "tga": {
       "value": 977.084,
@@ -17798,11 +17798,11 @@
           "value": 977.084
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "onRrp": {
-      "value": 0.63,
-      "asOf": "2026-09-24",
+      "value": 0.576,
+      "asOf": "2026-09-25",
       "source": "fred:RRPONTSYD",
       "sourceUrl": "https://fred.stlouisfed.org/series/RRPONTSYD",
       "unit": "usd_bn",
@@ -17811,10 +17811,6 @@
       "periodDated": false,
       "label": "ON RRP take-up",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 1.076
-        },
         {
           "date": "2026-07-31",
           "value": 2.151
@@ -17970,13 +17966,17 @@
         {
           "date": "2026-09-24",
           "value": 0.63
+        },
+        {
+          "date": "2026-09-25",
+          "value": 0.576
         }
       ],
       "ageDays": 1
     },
     "igOas": {
-      "value": 77,
-      "asOf": "2026-09-23",
+      "value": 79,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLC0A0CM",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLC0A0CM",
       "unit": "bp",
@@ -17985,10 +17985,6 @@
       "periodDated": false,
       "label": "ICE BofA IG OAS",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 80
-        },
         {
           "date": "2026-07-31",
           "value": 79
@@ -18144,13 +18140,17 @@
         {
           "date": "2026-09-23",
           "value": 77
+        },
+        {
+          "date": "2026-09-24",
+          "value": 79
         }
       ],
       "ageDays": 2
     },
     "hyOas": {
-      "value": 273,
-      "asOf": "2026-09-23",
+      "value": 280,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLH0A0HYM2",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLH0A0HYM2",
       "unit": "bp",
@@ -18159,10 +18159,6 @@
       "periodDated": false,
       "label": "ICE BofA HY OAS",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 284
-        },
         {
           "date": "2026-07-31",
           "value": 285
@@ -18318,13 +18314,17 @@
         {
           "date": "2026-09-23",
           "value": 273
+        },
+        {
+          "date": "2026-09-24",
+          "value": 280
         }
       ],
       "ageDays": 2
     },
     "bbOas": {
-      "value": 159,
-      "asOf": "2026-09-23",
+      "value": 164,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLH0A1HYBB",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLH0A1HYBB",
       "unit": "bp",
@@ -18333,10 +18333,6 @@
       "periodDated": false,
       "label": "ICE BofA BB OAS",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 174
-        },
         {
           "date": "2026-07-31",
           "value": 173
@@ -18492,13 +18488,17 @@
         {
           "date": "2026-09-23",
           "value": 159
+        },
+        {
+          "date": "2026-09-24",
+          "value": 164
         }
       ],
       "ageDays": 2
     },
     "cccOas": {
-      "value": 1093,
-      "asOf": "2026-09-23",
+      "value": 1112,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLH0A3HYC",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLH0A3HYC",
       "unit": "bp",
@@ -18507,10 +18507,6 @@
       "periodDated": false,
       "label": "ICE BofA CCC & lower OAS",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 1006
-        },
         {
           "date": "2026-07-31",
           "value": 1034
@@ -18666,13 +18662,17 @@
         {
           "date": "2026-09-23",
           "value": 1093
+        },
+        {
+          "date": "2026-09-24",
+          "value": 1112
         }
       ],
       "ageDays": 2
     },
     "igYield": {
-      "value": 5.83,
-      "asOf": "2026-09-23",
+      "value": 5.9,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLC0A0CMEY",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLC0A0CMEY",
       "unit": "pct",
@@ -18681,10 +18681,6 @@
       "periodDated": false,
       "label": "IG effective yield",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 5.39
-        },
         {
           "date": "2026-07-31",
           "value": 5.45
@@ -18840,13 +18836,17 @@
         {
           "date": "2026-09-23",
           "value": 5.83
+        },
+        {
+          "date": "2026-09-24",
+          "value": 5.9
         }
       ],
       "ageDays": 2
     },
     "hyYield": {
-      "value": 7.68,
-      "asOf": "2026-09-23",
+      "value": 7.8,
+      "asOf": "2026-09-24",
       "source": "fred:BAMLH0A0HYM2EY",
       "sourceUrl": "https://fred.stlouisfed.org/series/BAMLH0A0HYM2EY",
       "unit": "pct",
@@ -18855,10 +18855,6 @@
       "periodDated": false,
       "label": "HY effective yield",
       "history": [
-        {
-          "date": "2026-07-30",
-          "value": 7.16
-        },
         {
           "date": "2026-07-31",
           "value": 7.28
@@ -19014,6 +19010,10 @@
         {
           "date": "2026-09-23",
           "value": 7.68
+        },
+        {
+          "date": "2026-09-24",
+          "value": 7.8
         }
       ],
       "ageDays": 2
@@ -19190,7 +19190,7 @@
           "value": 7.03
         }
       ],
-      "ageDays": 1
+      "ageDays": 2
     },
     "vix": {
       "value": 14.21,
@@ -19364,7 +19364,7 @@
           "value": 14.21
         }
       ],
-      "ageDays": 3
+      "ageDays": 4
     },
     "corePceIndex": {
       "value": 130.658,
@@ -19538,7 +19538,7 @@
           "value": 130.658
         }
       ],
-      "ageDays": 86
+      "ageDays": 87
     },
     "coreCpiIndex": {
       "value": 337.765,
@@ -19712,7 +19712,7 @@
           "value": 337.765
         }
       ],
-      "ageDays": 55
+      "ageDays": 56
     },
     "payrolls": {
       "value": 159075,
@@ -19886,7 +19886,7 @@
           "value": 159075
         }
       ],
-      "ageDays": 55
+      "ageDays": 56
     },
     "unemployment": {
       "value": 4.1,
@@ -20060,7 +20060,7 @@
           "value": 4.1
         }
       ],
-      "ageDays": 55
+      "ageDays": 56
     },
     "sahm": {
       "value": -0.07,
@@ -20234,7 +20234,7 @@
           "value": -0.07
         }
       ],
-      "ageDays": 55
+      "ageDays": 56
     },
     "claims4wk": {
       "value": 202250,
@@ -20408,7 +20408,7 @@
           "value": 202250
         }
       ],
-      "ageDays": 6
+      "ageDays": 7
     },
     "wti": {
       "value": 96.41,
@@ -20582,7 +20582,7 @@
           "value": 96.41
         }
       ],
-      "ageDays": 3
+      "ageDays": 4
     },
     "nominalGdp": {
       "value": 32.4861,
@@ -20652,7 +20652,7 @@
           "value": 32.4861
         }
       ],
-      "ageDays": 177
+      "ageDays": 178
     },
     "netInterestAnnual": {
       "value": 1.247,
@@ -20722,7 +20722,7 @@
           "value": 1.247
         }
       ],
-      "ageDays": 177
+      "ageDays": 178
     },
     "usdjpy": {
       "value": 156.87,
@@ -20896,11 +20896,11 @@
           "value": 156.87
         }
       ],
-      "ageDays": 7
+      "ageDays": 8
     },
     "sofr": {
-      "value": 3.87,
-      "asOf": "2026-09-23",
+      "value": 3.88,
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "pct",
@@ -20910,8 +20910,8 @@
       "ageDays": 2
     },
     "sofrP99": {
-      "value": 3.95,
-      "asOf": "2026-09-23",
+      "value": 3.96,
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "pct",
@@ -20922,7 +20922,7 @@
     },
     "sofrP1": {
       "value": 3.81,
-      "asOf": "2026-09-23",
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "pct",
@@ -20932,8 +20932,8 @@
       "ageDays": 2
     },
     "sofrVolume": {
-      "value": 2946,
-      "asOf": "2026-09-23",
+      "value": 2990,
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "usd_bn",
@@ -20943,8 +20943,8 @@
       "ageDays": 2
     },
     "tgcr": {
-      "value": 3.85,
-      "asOf": "2026-09-23",
+      "value": 3.86,
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "pct",
@@ -20954,8 +20954,8 @@
       "ageDays": 2
     },
     "bgcr": {
-      "value": 3.85,
-      "asOf": "2026-09-23",
+      "value": 3.86,
+      "asOf": "2026-09-24",
       "source": "nyfed:reference-rates",
       "sourceUrl": "https://www.newyorkfed.org/markets/reference-rates/sofr",
       "unit": "pct",
@@ -20965,8 +20965,8 @@
       "ageDays": 2
     },
     "debtHeldByPublic": {
-      "value": 32.3769,
-      "asOf": "2026-09-23",
+      "value": 32.3627,
+      "asOf": "2026-09-24",
       "source": "fiscaldata:debt_to_penny",
       "sourceUrl": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
       "unit": "usd_tn",
@@ -20976,8 +20976,8 @@
       "ageDays": 2
     },
     "tgaDaily": {
-      "value": 947.32,
-      "asOf": "2026-09-23",
+      "value": 924.63,
+      "asOf": "2026-09-24",
       "source": "fiscaldata:operating_cash_balance",
       "sourceUrl": "https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/",
       "unit": "usd_bn",
@@ -20995,7 +20995,7 @@
       "staleAfterDays": 75,
       "periodDated": true,
       "label": "Core PCE 3m annualised",
-      "ageDays": 86
+      "ageDays": 87
     },
     "corePceYoY": {
       "value": 3.3441,
@@ -21006,7 +21006,7 @@
       "staleAfterDays": 75,
       "periodDated": true,
       "label": "Core PCE y/y",
-      "ageDays": 86
+      "ageDays": 87
     },
     "nfpChange": {
       "value": 162,
@@ -21017,7 +21017,7 @@
       "staleAfterDays": 70,
       "periodDated": true,
       "label": "Monthly payroll change",
-      "ageDays": 55
+      "ageDays": 56
     },
     "nfp3mAvg": {
       "value": 71.3333,
@@ -21028,7 +21028,7 @@
       "staleAfterDays": 70,
       "periodDated": true,
       "label": "Payroll change, 3m average",
-      "ageDays": 55
+      "ageDays": 56
     },
     "nominalGrowthYoY": {
       "value": 6.5618,
@@ -21039,10 +21039,10 @@
       "staleAfterDays": 220,
       "periodDated": true,
       "label": "Nominal GDP growth y/y",
-      "ageDays": 177
+      "ageDays": 178
     },
     "effectiveDebtRate": {
-      "value": 3.8515,
+      "value": 3.8532,
       "asOf": "2026-04-01",
       "source": "derived(netInterestAnnual+debtHeldByPublic)",
       "unit": "pct",
@@ -21050,11 +21050,11 @@
       "staleAfterDays": 220,
       "periodDated": true,
       "label": "Effective rate on debt held by the public",
-      "ageDays": 177
+      "ageDays": 178
     },
     "sofrMinusIorb": {
-      "value": -3,
-      "asOf": "2026-09-23",
+      "value": -2,
+      "asOf": "2026-09-24",
       "source": "derived(sofr+iorb)",
       "unit": "bp",
       "tag": "E",
@@ -21065,7 +21065,7 @@
     },
     "sofrTailWidth": {
       "value": 8,
-      "asOf": "2026-09-23",
+      "asOf": "2026-09-24",
       "source": "derived(sofrP99+sofr)",
       "unit": "bp",
       "tag": "E",
@@ -21075,8 +21075,8 @@
       "ageDays": 2
     },
     "cccMinusBb": {
-      "value": 934,
-      "asOf": "2026-09-23",
+      "value": 948,
+      "asOf": "2026-09-24",
       "source": "derived(cccOas+bbOas)",
       "unit": "bp",
       "tag": "E",
@@ -21087,7 +21087,7 @@
     },
     "realPolicyRate": {
       "value": 0.5359,
-      "asOf": "2026-09-23",
+      "asOf": "2026-09-24",
       "source": "derived(effr+corePceYoY)",
       "unit": "pct",
       "tag": "E",
@@ -21317,20 +21317,32 @@
   ],
   "stale": [
     {
+      "key": "kimWright10y",
+      "ageDays": 8,
+      "limit": 7,
+      "periodDated": false
+    },
+    {
       "key": "corePceIndex",
-      "ageDays": 86,
+      "ageDays": 87,
       "limit": 75,
       "periodDated": true
     },
     {
+      "key": "usdjpy",
+      "ageDays": 8,
+      "limit": 7,
+      "periodDated": false
+    },
+    {
       "key": "corePce3mSaar",
-      "ageDays": 86,
+      "ageDays": 87,
       "limit": 75,
       "periodDated": true
     },
     {
       "key": "corePceYoY",
-      "ageDays": 86,
+      "ageDays": 87,
       "limit": 75,
       "periodDated": true
     }
