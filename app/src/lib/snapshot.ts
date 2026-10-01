@@ -48,6 +48,42 @@ export interface ManualField {
   key: string; label: string; why: string; where: string;
 }
 
+/** One quarter of Call Report data for the Part 6 institution lens. */
+export interface BankQuarter {
+  quarter: string;
+  assets: number; deposits: number; loans: number; cash: number; equity: number;
+  securities: number; securitiesAfs: number; securitiesHtm: number;
+  ci: number; cre: number; auto: number; consumerOther: number;
+  allowance: number; npl: number; pastDue3089: number; pastDue90: number;
+  tier1: number;
+  cet1Pct: number | null; nimPct: number | null; roaPct: number | null;
+  roePct: number | null; efficiencyPct: number | null;
+  loansToDeposits: number | null; securitiesToAssets: number | null;
+  afsShareOfSecurities: number | null; equityToAssets: number | null;
+  ncoBp: number | null; nplPct: number | null; allowanceToLoansPct: number | null;
+  reserveCoverage: number | null; crePctTier1: number | null;
+  consumerPctLoans: number | null; ciPctLoans: number | null;
+}
+
+export interface BankSnapshot {
+  cert: number;
+  legalName: string;
+  groupName: string;
+  ticker: string;
+  city: string;
+  source: string;
+  sourceUrl: string;
+  asOf: string;
+  scopeNote: string;
+  thresholds: { categoryIV: number; categoryIII: number; categoryII: number; source: string };
+  aboveCategoryIII: boolean;
+  crossedAt: { fromQuarter: string; fromAssets: number; toQuarter: string; toAssets: number } | null;
+  latest: BankQuarter;
+  prior: BankQuarter | null;
+  yearAgo: BankQuarter | null;
+  quarters: BankQuarter[];
+}
+
 export interface Snapshot {
   schema: number;
   generatedAt: string;
@@ -55,6 +91,7 @@ export interface Snapshot {
   fredAccess: string;
   series: Record<string, Series>;
   auctions: Auction[];
+  bank: BankSnapshot | null;
   manualFields: ManualField[];
   failures: { key: string; source: string; reason: string }[];
   notes: string[];

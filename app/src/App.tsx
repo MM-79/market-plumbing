@@ -5,7 +5,11 @@ import {
   materialisePath, pathBase, narrativeReviewedOn,
 } from './data/scenarios';
 import { scorecard, trades, watchlist } from './data/synthesis';
-import { institutionImpacts, treasuryActions, exoticChains, inventedIndicator } from './data/institutionData';
+import {
+  institutionImpacts, treasuryActions, exoticChains, inventedIndicator,
+  regulatoryTransition, superRegionalThemes, depositBetaAsymmetry,
+  anchorValues, institutionReviewedOn,
+} from './data/institutionData';
 import {
   soWhat_Part0, soWhat_Part1, soWhat_Part2, soWhat_Part3, soWhat_Part4,
   soWhat_Part5, soWhat_Part6, soWhat_Appendix, soWhat_ScenarioD,
@@ -160,7 +164,7 @@ function App() {
         {activeTab === 'scenarios' && <ScenariosTab v={view} />}
         {activeTab === 'policy' && <PolicyTab />}
         {activeTab === 'synthesis' && <SynthesisTab />}
-        {activeTab === 'institution' && <InstitutionTab />}
+        {activeTab === 'institution' && <InstitutionTab v={view} />}
         {activeTab === 'exotic' && <ExoticTab />}
         {activeTab === 'audit' && <AuditPanel summary={audit} />}
         {activeTab === 'data' && <DataTab v={view} status={status} detail={detail} />}
@@ -873,16 +877,333 @@ function SynthesisTab() {
 
 // ========================================================== INSTITUTION ====
 
-function InstitutionTab() {
+function InstitutionTab({ v }: { v: View }) {
+  const b = v.snap.bank;
+
+  if (!b) {
+    return (
+      <div className="panel">
+        <div className="panel-header text-bear-red">PART 6 UNAVAILABLE &mdash; CALL REPORT NOT FETCHED</div>
+        <div className="p-4 text-xs text-terminal-muted">
+          The FDIC feed failed on the last pipeline run, so there are no balance-sheet figures to
+          analyse. This section deliberately renders nothing rather than falling back to illustrative
+          numbers &mdash; inventing a bank is precisely the failure this version of the framework was
+          built to remove.
+        </div>
+      </div>
+    );
+  }
+
+  const L = b.latest;
+  const Y = b.yearAgo;
+  const delta = (now: number | null, then: number | null | undefined, dp = 2, suffix = '') => {
+    if (now === null || then === null || then === undefined) return null;
+    const d = now - then;
+    return `${d > 0 ? '+' : ''}${d.toFixed(dp)}${suffix}`;
+  };
+
   return (
     <div className="space-y-4">
+      {/* ------------------------------------------------- the institution --- */}
       <div className="panel">
-        <div className="panel-header">PART 6 &mdash; BANK TREASURY AT A MORTGAGE-SERVICING BANK</div>
+        <div className="panel-header flex items-center justify-between flex-wrap gap-2">
+          <span>PART 6 &mdash; {b.legalName.toUpperCase()}</span>
+          <span className="text-terminal-muted font-normal normal-case text-[10px]">
+            FDIC cert {b.cert} · {b.city} · Call Report {b.asOf.slice(0, 4)}Q{Math.ceil(Number(b.asOf.slice(4, 6)) / 3)}
+          </span>
+        </div>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-terminal-muted leading-relaxed">
+            A consumer and commercial super-regional, chosen over the invented mortgage-servicing bank
+            this section used to describe for three reasons: the mix is genuinely consumer plus
+            commercial rather than a monoline, it has just absorbed a large acquisition so integration
+            strain shows up in reported numbers rather than a footnote, and it crossed $250bn of assets
+            in a single quarter &mdash; dragging it from Category IV into Category III supervision.
+            That last one is where the rate scenario and the regulatory regime collide, and it is what
+            this section now exists to analyse.
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {[
+              { k: 'Assets', v: `$${L.assets.toFixed(1)}bn`, d: delta(L.assets, Y?.assets, 1, 'bn') },
+              { k: 'Deposits', v: `$${L.deposits.toFixed(1)}bn`, d: delta(L.deposits, Y?.deposits, 1, 'bn') },
+              { k: 'Net loans', v: `$${L.loans.toFixed(1)}bn`, d: delta(L.loans, Y?.loans, 1, 'bn') },
+              { k: 'Loans / deposits', v: `${L.loansToDeposits?.toFixed(1)}%`, d: delta(L.loansToDeposits, Y?.loansToDeposits, 1, 'pp') },
+              { k: 'CET1', v: `${L.cet1Pct?.toFixed(2)}%`, d: delta(L.cet1Pct, Y?.cet1Pct, 2, 'pp') },
+              { k: 'NIM', v: `${L.nimPct?.toFixed(2)}%`, d: delta(L.nimPct, Y?.nimPct, 2, 'pp') },
+              { k: 'ROA', v: `${L.roaPct?.toFixed(2)}%`, d: delta(L.roaPct, Y?.roaPct, 2, 'pp') },
+              { k: 'Efficiency', v: `${L.efficiencyPct?.toFixed(1)}%`, d: delta(L.efficiencyPct, Y?.efficiencyPct, 1, 'pp') },
+              { k: 'AFS securities', v: `$${L.securitiesAfs.toFixed(1)}bn`, d: null },
+              { k: 'AFS share of book', v: `${L.afsShareOfSecurities?.toFixed(1)}%`, d: null },
+              { k: 'NCO (ann.)', v: `${L.ncoBp}bp`, d: delta(L.ncoBp, Y?.ncoBp, 0, 'bp') },
+              { k: 'NPL ratio', v: `${L.nplPct?.toFixed(2)}%`, d: delta(L.nplPct, Y?.nplPct, 2, 'pp') },
+            ].map((m) => (
+              <div key={m.k} className="bg-terminal-bg border border-terminal-border rounded p-2">
+                <div className="text-[10px] text-terminal-muted">{m.k}</div>
+                <div className="text-sm font-bold font-mono text-terminal-accent">{m.v}</div>
+                {m.d && <div className="text-[9px] font-mono text-terminal-muted">{m.d} y/y</div>}
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[10px] text-terminal-muted italic border-t border-terminal-border pt-2">
+            Every figure fetched from the FDIC Call Report API, no key required.{' '}
+            <span className="text-neutral-amber">Scope: {b.scopeNote}</span>{' '}
+            <a href={b.sourceUrl} target="_blank" rel="noreferrer" className="text-info-blue hover:underline">
+              BankFind profile
+            </a>
+            . Narrative last re-reasoned {institutionReviewedOn}.
+          </p>
+        </div>
+      </div>
+
+      {/* --------------------------------------------- the threshold event --- */}
+      <div className="panel border-bear-red/40">
+        <div className="panel-header text-bear-red">
+          THE THRESHOLD EVENT &mdash; {regulatoryTransition.headline.toUpperCase()}
+        </div>
+        <div className="p-4 space-y-4">
+          {b.crossedAt && (
+            <div className="bg-terminal-bg border border-terminal-border rounded p-3">
+              <div className="flex items-center justify-center gap-4 flex-wrap text-center">
+                <div>
+                  <div className="text-[10px] text-terminal-muted">{b.crossedAt.fromQuarter}</div>
+                  <div className="text-xl font-bold font-mono text-terminal-text">${b.crossedAt.fromAssets.toFixed(0)}bn</div>
+                  <div className="text-[10px] text-bull-green">Category IV</div>
+                </div>
+                <div className="text-2xl text-terminal-accent">&rarr;</div>
+                <div className="px-3">
+                  <div className="text-[10px] text-terminal-muted">threshold</div>
+                  <div className="text-xl font-bold font-mono text-neutral-amber">
+                    ${b.thresholds.categoryIII}bn
+                  </div>
+                  <div className="text-[10px] text-terminal-muted">{b.thresholds.source}</div>
+                </div>
+                <div className="text-2xl text-terminal-accent">&rarr;</div>
+                <div>
+                  <div className="text-[10px] text-terminal-muted">{b.crossedAt.toQuarter}</div>
+                  <div className="text-xl font-bold font-mono text-terminal-text">${b.crossedAt.toAssets.toFixed(0)}bn</div>
+                  <div className="text-[10px] text-bear-red">Category III</div>
+                </div>
+              </div>
+              <p className="text-[10px] text-terminal-muted text-center mt-2">
+                One quarter. Not a gradual approach that could be managed toward &mdash; a single step of
+                ${(b.crossedAt.toAssets - b.crossedAt.fromAssets).toFixed(0)}bn that cleared the line by
+                ${(b.crossedAt.toAssets - b.thresholds.categoryIII).toFixed(0)}bn.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {regulatoryTransition.whatChanges.map((c) => (
+              <div
+                key={c.item}
+                className={`border rounded p-3 ${
+                  c.severity === 'HIGH' ? 'border-bear-red/40 bg-bear-red/5'
+                  : c.severity === 'MED' ? 'border-neutral-amber/30 bg-neutral-amber/5'
+                  : 'border-terminal-border bg-terminal-bg'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                  <span className={`text-xs font-bold ${
+                    c.severity === 'HIGH' ? 'text-bear-red'
+                    : c.severity === 'MED' ? 'text-neutral-amber' : 'text-terminal-muted'
+                  }`}>{c.item}</span>
+                  <div className="flex items-center gap-2">
+                    {c.rateSensitive && (
+                      <span className="text-[9px] font-bold text-bear-red border border-bear-red/40 rounded px-1.5 py-0.5">
+                        RATE-SENSITIVE
+                      </span>
+                    )}
+                    <span className="text-[9px] text-terminal-muted">{c.severity}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-terminal-muted leading-relaxed">{c.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="bg-bear-red/10 border border-bear-red/30 rounded p-3">
+              <div className="text-[10px] font-bold text-bear-red uppercase tracking-wider mb-1">The collision</div>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{regulatoryTransition.theCollision}</p>
+            </div>
+            <div className="bg-bull-green/10 border border-bull-green/30 rounded p-3">
+              <div className="text-[10px] font-bold text-bull-green uppercase tracking-wider mb-1">The other side of it</div>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{regulatoryTransition.theDefence}</p>
+            </div>
+            <div className="bg-terminal-accent/10 border border-terminal-accent/30 rounded p-3">
+              <div className="text-[10px] font-bold text-terminal-accent uppercase tracking-wider mb-1">What to actually do</div>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{regulatoryTransition.theActionableVersion}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------- loan book composition --- */}
+      <div className="panel">
+        <div className="panel-header">LOAN BOOK &mdash; CONSUMER PLUS COMMERCIAL, NOT A MONOLINE</div>
+        <div className="p-4 space-y-3">
+          <div className="space-y-1">
+            {[
+              { name: 'Commercial & industrial', amt: L.ci, pct: L.ciPctLoans, tone: 'bg-bear-red/60' },
+              { name: 'Commercial real estate (incl. construction)', amt: L.cre, pct: L.loans ? (L.cre / L.loans) * 100 : 0, tone: 'bg-neutral-amber/60' },
+              { name: 'Auto', amt: L.auto, pct: L.loans ? (L.auto / L.loans) * 100 : 0, tone: 'bg-info-blue/60' },
+              { name: 'Other consumer', amt: L.consumerOther, pct: L.loans ? (L.consumerOther / L.loans) * 100 : 0, tone: 'bg-bull-green/60' },
+              { name: 'Residential mortgage & all other', amt: L.loans - L.ci - L.cre - L.auto - L.consumerOther, pct: L.loans ? ((L.loans - L.ci - L.cre - L.auto - L.consumerOther) / L.loans) * 100 : 0, tone: 'bg-terminal-muted/40' },
+            ].map((x) => (
+              <div key={x.name} className="flex items-center gap-3">
+                <div className="w-64 shrink-0 text-[11px] text-terminal-text">{x.name}</div>
+                <div className="flex-1 h-5 bg-terminal-bg rounded overflow-hidden border border-terminal-border">
+                  <div className={`h-full ${x.tone}`} style={{ width: `${Math.max(0, Math.min(100, x.pct ?? 0))}%` }} />
+                </div>
+                <div className="w-20 shrink-0 text-right font-mono text-xs text-terminal-accent">
+                  ${x.amt.toFixed(1)}bn
+                </div>
+                <div className="w-14 shrink-0 text-right font-mono text-[10px] text-terminal-muted">
+                  {(x.pct ?? 0).toFixed(1)}%
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="bg-bull-green/10 border border-bull-green/30 rounded p-3">
+              <div className="text-[10px] text-terminal-muted">CRE concentration vs tier 1</div>
+              <div className="text-2xl font-bold font-mono text-bull-green">{L.crePctTier1}%</div>
+              <div className="text-[10px] text-terminal-muted leading-snug mt-1">
+                Supervisory guidance flags concentration above 300%. Sitting at less than half that is
+                the single biggest structural difference between this balance sheet and the regionals
+                that broke in 2023-24, and almost nobody gives it credit for that.
+              </div>
+            </div>
+            <div className="bg-info-blue/10 border border-info-blue/30 rounded p-3">
+              <div className="text-[10px] text-terminal-muted">Direct consumer share of loans</div>
+              <div className="text-2xl font-bold font-mono text-info-blue">{L.consumerPctLoans}%</div>
+              <div className="text-[10px] text-terminal-muted leading-snug mt-1">
+                Fixed-rate and long-dated, so the existing book is insulated from a rate selloff and
+                acts as a margin stabiliser when the Fed cuts. The quiet virtue of a consumer franchise
+                relative to a pure commercial lender.
+              </div>
+            </div>
+            <div className="bg-bear-red/10 border border-bear-red/30 rounded p-3">
+              <div className="text-[10px] text-terminal-muted">C&amp;I share of loans</div>
+              <div className="text-2xl font-bold font-mono text-bear-red">{L.ciPctLoans}%</div>
+              <div className="text-[10px] text-terminal-muted leading-snug mt-1">
+                Mostly floating-rate, so it reprices down at close to 100% in a cutting cycle. Also
+                where lending to non-depository financial institutions hides, with no separate Call
+                Report disclosure &mdash; the largest exposure here that cannot be sized from outside.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------- credit signal --- */}
+      <div className="panel border-neutral-amber/40">
+        <div className="panel-header text-neutral-amber">
+          THE CREDIT SIGNAL &mdash; FORMATION VERSUS REALISATION
+        </div>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-terminal-muted leading-relaxed">
+            Normalisation and deterioration look identical for about three quarters and then diverge
+            violently. The tell is not the charge-off rate &mdash; it is the relationship between
+            non-performing loans ENTERING the book and losses LEAVING it. A stable charge-off rate
+            alongside rising non-accruals is not normalisation. It is a queue.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Quarter</th><th>Assets $bn</th><th>Loans $bn</th><th>NPL $bn</th><th>NPL %</th>
+                  <th>NCO bp (ann.)</th><th>Allowance %</th><th>Reserve cover</th><th>CET1 %</th><th>NIM %</th><th>Efficiency %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {b.quarters.slice(0, 9).map((q, i) => {
+                  const crossed = b.crossedAt && q.quarter === b.crossedAt.toQuarter;
+                  return (
+                    <tr key={q.quarter} className={i === 0 ? 'bg-terminal-accent/5' : crossed ? 'bg-bear-red/10' : ''}>
+                      <td className="font-mono text-terminal-accent">
+                        {q.quarter}
+                        {crossed && <span className="ml-1 text-[9px] text-bear-red">CAT III</span>}
+                      </td>
+                      <td className="font-mono">{q.assets.toFixed(1)}</td>
+                      <td className="font-mono">{q.loans.toFixed(1)}</td>
+                      <td className="font-mono">{q.npl.toFixed(2)}</td>
+                      <td className="font-mono text-neutral-amber">{q.nplPct?.toFixed(2)}</td>
+                      <td className="font-mono">{q.ncoBp}</td>
+                      <td className="font-mono">{q.allowanceToLoansPct?.toFixed(2)}</td>
+                      <td className={`font-mono ${(q.reserveCoverage ?? 9) < 1.5 ? 'text-bear-red' : ''}`}>
+                        {q.reserveCoverage?.toFixed(2)}x
+                      </td>
+                      <td className="font-mono">{q.cet1Pct?.toFixed(2)}</td>
+                      <td className="font-mono">{q.nimPct?.toFixed(2)}</td>
+                      <td className="font-mono">{q.efficiencyPct?.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-terminal-bg border border-terminal-border rounded p-3">
+            <div className="text-[10px] font-bold text-neutral-amber uppercase tracking-wider mb-1">
+              Read the table this way
+            </div>
+            <p className="text-[11px] text-terminal-muted leading-relaxed">
+              Non-performing loans have risen sharply across the acquisition quarters while the
+              annualised charge-off rate has been flat to LOWER. Reserve coverage of non-accruals has
+              fallen as a direct consequence. Part of that is purchase accounting &mdash; acquired loans
+              arrive with their own credit marks and show up as non-accrual without generating a
+              charge-off. Part of it may not be. The honest position is that these two explanations are
+              observationally equivalent right now and separate within two or three quarters, which is
+              exactly why the formation-to-realisation gap belongs on the ALCO dashboard as a standing
+              trigger rather than as a quarterly discussion item.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ----------------------------------------------- deposit beta trap --- */}
+      <div className="panel">
+        <div className="panel-header">THE DOWN-BETA TRAP &mdash; WHY AN EASING CYCLE HURTS FIRST</div>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-terminal-text leading-relaxed">{depositBetaAsymmetry.premise}</p>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead><tr><th>Balance sheet leg</th><th>Reprices at</th><th>Speed</th><th>Why it matters</th></tr></thead>
+              <tbody>
+                {depositBetaAsymmetry.legs.map((l) => (
+                  <tr key={l.leg}>
+                    <td className="font-semibold text-terminal-text">{l.leg}</td>
+                    <td className="font-mono text-terminal-accent">{l.repricesAt}</td>
+                    <td className="text-[10px] text-terminal-muted">{l.speed}</td>
+                    <td className="text-[10px] text-terminal-muted">{l.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-bear-red/5 border border-bear-red/25 rounded p-3">
+              <div className="text-[10px] font-bold text-bear-red uppercase tracking-wider mb-1">The trap</div>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{depositBetaAsymmetry.theTrap}</p>
+            </div>
+            <div className="bg-info-blue/5 border border-info-blue/25 rounded p-3">
+              <div className="text-[10px] font-bold text-info-blue uppercase tracking-wider mb-1">The hedge, and what it actually costs</div>
+              <p className="text-[11px] text-terminal-muted leading-relaxed">{depositBetaAsymmetry.theHedge}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --------------------------------------------- scenario grid --------- */}
+      <div className="panel">
+        <div className="panel-header">BALANCE SHEET BY SCENARIO</div>
         <div className="p-4 overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Area</th><th>Current</th>
+                <th>Area</th><th>Live anchors</th>
                 <th className="text-neutral-amber">A · Grind</th>
                 <th className="text-bear-red">B · Fiscal</th>
                 <th className="text-info-blue">C · Stagflation</th>
@@ -894,7 +1215,15 @@ function InstitutionTab() {
               {institutionImpacts.map((r) => (
                 <tr key={r.area}>
                   <td className="font-semibold text-terminal-text">{r.area}</td>
-                  <td className="text-[10px] font-mono text-terminal-muted">{r.current}</td>
+                  <td className="text-[10px]">
+                    {anchorValues(v.snap, r.anchors).map((a) => (
+                      <div key={a.key} className="whitespace-nowrap">
+                        <span className="text-terminal-muted">{a.key} </span>
+                        <span className="font-mono text-terminal-accent">{a.value}</span>
+                      </div>
+                    ))}
+                    <div className="text-terminal-muted/60 mt-1">{r.measure}</div>
+                  </td>
                   <td className="text-[10px] text-terminal-muted">{r.A}</td>
                   <td className="text-[10px] text-terminal-muted">{r.B}</td>
                   <td className="text-[10px] text-terminal-muted">{r.C}</td>
@@ -904,19 +1233,43 @@ function InstitutionTab() {
               ))}
             </tbody>
           </table>
-          <p className="text-[10px] text-terminal-muted mt-2">
-            The &ldquo;current&rdquo; column describes an illustrative institution and is not fetched. It is a worked
-            example of how the scenarios land on a specific balance sheet, not a claim about any real bank.
-          </p>
         </div>
       </div>
 
+      {/* ------------------------------------------- super-regional themes --- */}
+      <div className="panel">
+        <div className="panel-header">THE SUPER-REGIONAL CONVERSATION &mdash; AND WHERE IT IS WRONG</div>
+        <div className="p-4 space-y-3">
+          {superRegionalThemes.map((t) => (
+            <div key={t.theme} className="border border-terminal-border rounded overflow-hidden">
+              <div className="bg-terminal-bg px-3 py-2 text-xs font-bold text-terminal-accent">{t.theme}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-terminal-border">
+                <div className="bg-terminal-panel p-3">
+                  <div className="text-[10px] font-bold text-info-blue uppercase tracking-wider mb-1">What the street says</div>
+                  <p className="text-[11px] text-terminal-muted leading-relaxed">{t.whatTheStreetSays}</p>
+                </div>
+                <div className="bg-terminal-panel p-3">
+                  <div className="text-[10px] font-bold text-neutral-amber uppercase tracking-wider mb-1">What it actually means</div>
+                  <p className="text-[11px] text-terminal-muted leading-relaxed">{t.whatItActuallyMeans}</p>
+                </div>
+              </div>
+              <div className="bg-terminal-accent/5 border-t border-terminal-border p-3">
+                <span className="text-[10px] font-bold text-terminal-accent uppercase tracking-wider">On this balance sheet: </span>
+                <span className="text-[11px] text-terminal-text leading-relaxed">{t.thisBank}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------- actions ----- */}
       <div className="panel">
         <div className="panel-header">ACTIONS &mdash; WITH TRIGGER, OWNER, LEAD TIME AND COST</div>
         <div className="p-4 space-y-2">
           <p className="text-[11px] text-terminal-muted">
-            An action without an owner and a lead time is a wish. Three of these have a trigger of &ldquo;now&rdquo;:
-            the cheapest insurance is always the insurance bought while nobody wants it.
+            An action without an owner and a lead time is a wish. Four of these have a trigger of
+            &ldquo;now&rdquo;, and three of those are driven by the regulatory calendar rather than by
+            anything the market does &mdash; which is what makes them the ones most likely to slip.
           </p>
           {treasuryActions.map((a) => (
             <div key={a.action} className="border border-terminal-border rounded p-3">

@@ -254,3 +254,70 @@ export const MANUAL_FIELDS = [
   { key: 'basisTrade', label: 'Leveraged-fund gross UST futures short', why: 'CFTC TFF is machine-readable but contract-level aggregation across the five UST futures is judgement-heavy; left manual until the aggregation is validated.', where: 'https://publicreporting.cftc.gov/resource/gpe5-46if.json' },
   { key: 'foreignHoldings', label: 'TIC foreign holdings', why: 'Published with a six-week lag as fixed-width text.', where: 'https://home.treasury.gov/data/treasury-international-capital-tic-system' },
 ];
+
+// ------------------------------------------------- institution lens (P6) ---
+
+/**
+ * FDIC BankFind, for the Part 6 institution lens.
+ *
+ * Part 6 used to describe an invented mortgage-servicing bank with invented
+ * balances. That was the last large block of fabricated numbers left in the
+ * framework after v3.1, and it survived only because nobody had tried to fetch
+ * it. The FDIC publishes every insured depository's quarterly Call Report as
+ * free JSON with no key, so there is no excuse.
+ *
+ * CERT 6560 is The Huntington National Bank: a Columbus, Ohio consumer and
+ * commercial super-regional. It is the right worked example for three reasons.
+ * Its business mix is genuinely consumer-plus-commercial rather than a
+ * monoline. It has just absorbed a large acquisition, so the integration shows
+ * up in the data rather than in a footnote. And it crossed $250bn of assets in
+ * a single quarter, which drags it from Category IV into Category III
+ * supervision - the one balance-sheet event where the rate scenario and the
+ * regulatory regime interact, and the thing this section exists to analyse.
+ *
+ * NOTE ON SCOPE: this is the BANK, not the holding company. Huntington
+ * Bancshares Incorporated consolidates slightly differently - holdco debt,
+ * non-bank subsidiaries - so these figures will not tie exactly to the 10-Q.
+ * The bank is the overwhelming majority of the group and it is the entity that
+ * actually holds the deposits, the securities and the regulatory capital, so
+ * it is the right lens for a treasury analysis. It is the wrong lens for an
+ * equity valuation.
+ */
+export const FDIC = {
+  cert: 6560,
+  legalName: 'The Huntington National Bank',
+  groupName: 'Huntington Bancshares Incorporated',
+  ticker: 'HBAN',
+  city: 'Columbus, OH',
+  base: 'https://api.fdic.gov/banks/financials',
+  profileUrl: 'https://banks.data.fdic.gov/bankfind-suite/bankfind/details/6560',
+  quarters: 12,
+  /** Call Report fields. Every one is a reported line, not a vendor estimate. */
+  fields: [
+    'REPDTE',     // report date
+    'ASSET', 'DEP', 'LNLSNET', 'CHBAL', 'EQ',
+    'SC', 'SCAF', 'SCHA',            // securities: total, AFS, HTM
+    'LNCI', 'LNRENRES', 'LNRECONS',  // C&I, nonresidential RE, construction
+    'LNAUTO', 'LNCONOTH',            // auto, other consumer
+    'LNATRES', 'NTLNLSQ', 'NCLNLS',  // allowance, quarterly net charge-offs, noncurrent
+    'P3ASSET', 'P9ASSET',            // past due 30-89, past due 90+
+    'RBC1RWAJ', 'RBCT1J',            // CET1 ratio, tier 1 capital
+    'NIMY', 'ROA', 'ROE', 'EEFFR', 'NONIXAY',
+  ],
+};
+
+/**
+ * Supervisory category thresholds, in $bn of total assets.
+ *
+ * These are the tailored-framework categories, and the one that matters for a
+ * growing super-regional is the $250bn line: crossing it removes the AOCI
+ * opt-out, so unrealised securities losses stop being filtered out of
+ * regulatory capital and start counting against CET1 directly. A bank can
+ * manage a mark-to-market loss. A bank cannot ignore a capital ratio.
+ */
+export const SUPERVISORY_THRESHOLDS = {
+  categoryIV: 100,
+  categoryIII: 250,
+  categoryII: 700,
+  source: 'Federal Reserve tailoring rule (2019), 12 CFR 252',
+};

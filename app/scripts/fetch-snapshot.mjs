@@ -24,6 +24,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   FRED_SERIES, DERIVED, NYFED, FISCALDATA, TREASURY_DIRECT, MANUAL_FIELDS,
+  FDIC, SUPERVISORY_THRESHOLDS,
 } from './sources.mjs';
 
 const args = process.argv.slice(2);
@@ -266,6 +267,127 @@ async function collectAuctions() {
   }
 }
 
+
+// ---------------------------------------------------- institution (P6) -----
+
+/**
+ * Quarterly Call Report history for the Part 6 example bank.
+ *
+ * Returns the raw reported lines plus the ratios the lens actually argues
+ * about. The ratios are computed here rather than in the UI so that a figure
+ * quoted in prose and the same figure in a table cannot drift apart - the same
+ * rule the rest of the framework follows for curve spreads.
+ */
+async function collectBank() {
+  try {
+    const url = `${FDIC.base}?filters=CERT:${FDIC.cert}`
+      + `&fields=${FDIC.fields.join(',')}`
+      + `&limit=${FDIC.quarters}&sort_by=REPDTE&sort_order=DESC`;
+    const j = await fetchWithRetry(url, { as: 'json' });
+    const raw = (j.data || []).map((r) => r.data).filter((x) => x && x.ASSET);
+    if (!raw.length) throw new Error('no Call Report rows');
+
+    // FDIC reports in $thousands. Everything below is $bn.
+    const bn = (v) => (Number.isFinite(v) ? round(v / 1e6, 3) : null);
+
+    const quarters = raw.map((x) => {
+      const loans = x.LNLSNET || 0;
+      const cre = (x.LNRENRES || 0) + (x.LNRECONS || 0);
+      const consumer = (x.LNAUTO || 0) + (x.LNCONOTH || 0);
+      const npl = x.NCLNLS || 0;
+      return {
+        quarter: String(x.REPDTE),
+        assets: bn(x.ASSET),
+        deposits: bn(x.DEP),
+        loans: bn(loans),
+        cash: bn(x.CHBAL),
+        equity: bn(x.EQ),
+        securities: bn(x.SC),
+        securitiesAfs: bn(x.SCAF),
+        securitiesHtm: bn(x.SCHA),
+        ci: bn(x.LNCI),
+        cre: bn(cre),
+        auto: bn(x.LNAUTO),
+        consumerOther: bn(x.LNCONOTH),
+        allowance: bn(x.LNATRES),
+        npl: bn(npl),
+        pastDue3089: bn(x.P3ASSET),
+        pastDue90: bn(x.P9ASSET),
+        tier1: bn(x.RBCT1J),
+        cet1Pct: x.RBC1RWAJ ?? null,
+        nimPct: x.NIMY != null ? round(x.NIMY, 2) : null,
+        roaPct: x.ROA != null ? round(x.ROA, 2) : null,
+        roePct: x.ROE != null ? round(x.ROE, 2) : null,
+        efficiencyPct: x.EEFFR != null ? round(x.EEFFR, 1) : null,
+        // --- derived ratios ---
+        loansToDeposits: x.DEP ? round((loans / x.DEP) * 100, 1) : null,
+        securitiesToAssets: x.ASSET ? round((x.SC / x.ASSET) * 100, 1) : null,
+        afsShareOfSecurities: x.SC ? round(((x.SCAF || 0) / x.SC) * 100, 1) : null,
+        equityToAssets: x.ASSET ? round((x.EQ / x.ASSET) * 100, 1) : null,
+        // Annualised from the quarterly figure, in bp of loans.
+        ncoBp: loans ? round(((x.NTLNLSQ || 0) * 4 / loans) * 10000, 0) : null,
+        nplPct: loans ? round((npl / loans) * 100, 2) : null,
+        allowanceToLoansPct: loans ? round(((x.LNATRES || 0) / loans) * 100, 2) : null,
+        // Reserve cover of non-current loans. Below 1.0x means the allowance
+        // does not cover the loans already known to be in trouble.
+        reserveCoverage: npl ? round((x.LNATRES || 0) / npl, 2) : null,
+        // The CRE concentration test regulators actually apply. Guidance level
+        // is 300% of total capital; this uses tier 1 as the conservative proxy.
+        crePctTier1: x.RBCT1J ? round((cre / x.RBCT1J) * 100, 0) : null,
+        consumerPctLoans: loans ? round((consumer / loans) * 100, 1) : null,
+        ciPctLoans: loans ? round((x.LNCI / loans) * 100, 1) : null,
+      };
+    });
+
+    const latest = quarters[0];
+    const prior = quarters[1] || null;
+    const yearAgo = quarters[4] || null;
+
+    log(`  ok   bank                 ${FDIC.legalName}  ${latest.quarter}`);
+    log(`       assets $${latest.assets}bn · deposits $${latest.deposits}bn · `
+      + `CET1 ${latest.cet1Pct}% · NIM ${latest.nimPct}% · NCO ${latest.ncoBp}bp`);
+
+    const threshold = SUPERVISORY_THRESHOLDS.categoryIII;
+    const crossed = latest.assets >= threshold;
+    // Find the quarter the line was crossed, scanning backwards through time.
+    let crossedAt = null;
+    for (let i = quarters.length - 1; i > 0; i--) {
+      if (quarters[i].assets < threshold && quarters[i - 1].assets >= threshold) {
+        crossedAt = { from: quarters[i], to: quarters[i - 1] };
+      }
+    }
+    if (crossed) {
+      log(`       above the $${threshold}bn Category III threshold`
+        + (crossedAt ? ` - crossed between ${crossedAt.from.quarter} and ${crossedAt.to.quarter}` : ''));
+    }
+
+    return {
+      cert: FDIC.cert,
+      legalName: FDIC.legalName,
+      groupName: FDIC.groupName,
+      ticker: FDIC.ticker,
+      city: FDIC.city,
+      source: 'fdic:bankfind',
+      sourceUrl: FDIC.profileUrl,
+      asOf: latest.quarter,
+      scopeNote: 'Insured depository only, not the consolidated holding company. '
+        + 'Will not tie exactly to the 10-Q.',
+      thresholds: SUPERVISORY_THRESHOLDS,
+      aboveCategoryIII: crossed,
+      crossedAt: crossedAt
+        ? { fromQuarter: crossedAt.from.quarter, fromAssets: crossedAt.from.assets,
+            toQuarter: crossedAt.to.quarter, toAssets: crossedAt.to.assets }
+        : null,
+      latest, prior, yearAgo,
+      quarters,
+    };
+  } catch (e) {
+    failures.push({ key: 'bank', source: 'fdic', reason: String(e.message || e) });
+    log(`  FAIL bank: ${e.message || e}`);
+    return null;
+  }
+}
+
 // -------------------------------------------------------------- derived ----
 
 function computeDerived(series) {
@@ -311,6 +433,9 @@ async function main() {
   log('\nTreasuryDirect auctions');
   const auctions = await collectAuctions();
 
+  log('\nFDIC Call Report (Part 6 institution lens)');
+  const bank = await collectBank();
+
   log('\nDerived');
   computeDerived(series);
 
@@ -347,6 +472,7 @@ async function main() {
     fredAccess: FRED_KEY ? 'api-key' : 'public-csv',
     series,
     auctions,
+    bank,
     manualFields: MANUAL_FIELDS,
     failures,
     notes,

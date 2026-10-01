@@ -5,6 +5,87 @@ previous run got wrong.
 
 ---
 
+## v3.2 - 2026-10-01
+
+**Part 6 rewritten around a real consumer-and-commercial super-regional, with
+the balance sheet fetched rather than invented.**
+
+### The last fabricated block
+
+v3.1 removed every invented market number but left Part 6 untouched: an
+imaginary mortgage-servicing bank with $4.2bn of escrow, an $890m MSR and a
+60% hedge ratio. None of it was real, and it survived for exactly the reason
+every other fabricated number survived - nobody had tried to fetch it.
+
+It is now The Huntington National Bank (FDIC cert 6560), a Columbus, Ohio
+consumer-and-commercial super-regional, with every figure pulled from its
+quarterly Call Report through the FDIC BankFind API. Free, no key, 12 quarters
+of history, wired into the same pipeline as everything else.
+
+### Why this bank, and what the data shows
+
+Chosen because the mix is genuinely consumer plus commercial rather than a
+monoline; because a large acquisition has just closed, so integration strain
+appears in reported numbers rather than a footnote; and because it crossed
+$250bn of assets in a SINGLE quarter - $224bn to $284bn - dragging it from
+Category IV into Category III supervision.
+
+That crossing is the analytical spine of the section. Category III removes the
+AOCI opt-out, so unrealised securities losses stop being filtered out of
+regulatory capital. A bank with a large available-for-sale book has just
+converted a mark-to-market exposure into a capital-ratio exposure, and it did
+so without choosing the timing of either the deal or the rate environment. The
+collision between the rate scenario and the regulatory calendar is the thing a
+generic bank-treasury template will never surface, because it requires reading
+both on the same page.
+
+The second finding is in the credit table: non-performing loans have risen
+sharply across the acquisition quarters while the annualised charge-off rate
+has been flat to lower, so reserve coverage of non-accruals has fallen
+materially. Purchase accounting explains part of it. Whether it explains all of
+it is not determinable from outside, and the section says so rather than
+picking the comfortable reading.
+
+### Added
+
+- `collectBank()` in the fetcher: 12 quarters of Call Report data plus the
+  ratios the lens argues about (loans/deposits, CRE as a percentage of tier 1,
+  AFS share of securities, annualised NCOs in bp, reserve coverage, NPL ratio),
+  all computed in the pipeline so prose and tables cannot drift apart.
+- Automatic detection of the Category III crossing by scanning the asset
+  history, rather than hard-coding the quarter.
+- `regulatoryTransition` - the five Category IV to III changes, each flagged
+  for rate sensitivity, plus the collision, the defence and the actionable
+  version.
+- `depositBetaAsymmetry` - leg-by-leg repricing table showing why an easing
+  cycle compresses margin first. Asset sensitivity describes the up-move;
+  almost nobody carries the implication through to the down-move.
+- `superRegionalThemes` - six market-commentary themes with what the street
+  says, what it actually means, and what the live filings show.
+- Loan book composition chart, credit formation-versus-realisation table, and
+  a scenario grid whose anchor values are read from the Call Report.
+- Part 6 sector read rewritten to be a LOAN BOOK rather than a portfolio: the
+  small-cap index is not an allocation decision for a regional bank, it is a
+  photograph of its commercial borrowers, and it leads commercial reserve build
+  by two to three quarters.
+- Part 6 renders an explicit unavailable state if the FDIC feed fails, rather
+  than falling back to illustrative numbers.
+
+### Scope limits, stated in the UI
+
+- The FDIC reports the INSURED DEPOSITORY, not the consolidated holding
+  company. These figures will not tie exactly to the 10-Q. Right lens for a
+  treasury analysis, wrong lens for an equity valuation.
+- Lending to non-depository financial institutions sits inside the C&I line
+  with no separate Call Report disclosure. It is the largest exposure in the
+  analysis that cannot be sized from public filings, and it is flagged as
+  unmeasurable rather than assumed away.
+- Deposit beta, NIB share and hedge notionals are not in the Call Report. The
+  down-beta figures are reasoned estimates and tagged as such.
+
+---
+
+
 ## v3.1 - 2026-09-24
 
 **The data now fetches itself, and doing so proved that every number in v3.0 was

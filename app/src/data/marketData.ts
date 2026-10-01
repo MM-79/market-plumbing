@@ -55,6 +55,7 @@ export const SOURCES: SourceRef[] = [
   { key: 'nyfed-rates', title: 'NY Fed Reference Rates (SOFR, TGCR, BGCR and percentiles)', url: 'https://www.newyorkfed.org/markets/reference-rates/sofr', cadence: 'Daily 08:00 ET. Automated.' },
   { key: 'fiscaldata', title: 'Treasury Fiscal Data (Debt to the Penny, Daily Treasury Statement)', url: 'https://fiscaldata.treasury.gov/', cadence: 'Daily. Automated.' },
   { key: 'treasurydirect', title: 'TreasuryDirect auction results', url: 'https://www.treasurydirect.gov/auctions/announcements-data-results/', cadence: 'Per auction. Automated.' },
+  { key: 'fdic', title: 'FDIC BankFind - quarterly Call Reports (Part 6 institution lens)', url: 'https://banks.data.fdic.gov/bankfind-suite/bankfind/details/6560', cadence: 'Quarterly. Automated.' },
   { key: 'acm', title: 'NY Fed ACM Term Premium Estimates', url: 'https://www.newyorkfed.org/research/data_indicators/term-premia-tabs', cadence: 'Daily, published as XLS. MANUAL.' },
   { key: 'qra', title: 'Quarterly Refunding Statements and TBAC minutes', url: 'https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding', cadence: 'Quarterly. MANUAL.' },
   { key: 'h41', title: 'Federal Reserve H.4.1', url: 'https://www.federalreserve.gov/releases/h41/', cadence: 'Thursday 16:30 ET. Reserves and TGA come via FRED.' },
