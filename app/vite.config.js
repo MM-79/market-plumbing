@@ -7,6 +7,13 @@ import tailwindcss from "@tailwindcss/vite";
 // and `npm run preview` behave normally.
 const base = process.env.BASE_PATH || "/";
 
+// Take the port from the environment rather than pinning one. Nothing in this
+// app depends on a specific port - it is a static SPA that fetches its own
+// snapshot over a relative path, with no OAuth callback, webhook or
+// cross-origin call to register anywhere. Pinning 3000 only guaranteed a
+// collision with whatever else was already running.
+const port = process.env.PORT ? Number(process.env.PORT) : undefined;
+
 export default defineConfig({
   base,
   plugins: [react(), tailwindcss()],
@@ -18,8 +25,9 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: 3000,
-    strictPort: true,
-    hmr: { port: 3000 },
+    port,
+    // Let Vite move to the next free port instead of failing outright, and let
+    // HMR follow whatever port it lands on rather than hard-coding its own.
+    strictPort: false,
   },
 });

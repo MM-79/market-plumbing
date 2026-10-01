@@ -5,7 +5,7 @@
       "name": "yield-curve-prime",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app"],
-      "port": 3000
+      "autoPort": true
     }
   ]
 }
