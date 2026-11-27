@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-26T04:38:07.813Z",
-  "asOfDate": "2026-11-26",
+  "generatedAt": "2026-11-27T04:41:42.551Z",
+  "asOfDate": "2026-11-27",
   "fredAccess": "public-csv",
   "series": {
     "y2": {
@@ -2096,7 +2096,7 @@
           "value": 4.63
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "y5": {
       "value": 4.69,
@@ -4190,7 +4190,7 @@
           "value": 4.69
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "y10": {
       "value": 4.91,
@@ -6284,7 +6284,7 @@
           "value": 4.91
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "y30": {
       "value": 5.3,
@@ -8378,7 +8378,7 @@
           "value": 5.3
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "y3m": {
       "value": 4.36,
@@ -8552,7 +8552,7 @@
           "value": 4.36
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "tips10y": {
       "value": 2.79,
@@ -10646,7 +10646,7 @@
           "value": 2.79
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "tips5y": {
       "value": 2.58,
@@ -10820,7 +10820,7 @@
           "value": 2.58
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "bei10y": {
       "value": 2.12,
@@ -12914,7 +12914,7 @@
           "value": 2.12
         }
       ],
-      "ageDays": 1
+      "ageDays": 2
     },
     "bei5y5y": {
       "value": 2.11,
@@ -15008,7 +15008,7 @@
           "value": 2.11
         }
       ],
-      "ageDays": 1
+      "ageDays": 2
     },
     "effr": {
       "value": 3.88,
@@ -15182,7 +15182,7 @@
           "value": 3.88
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "iorb": {
       "value": 3.9,
@@ -15356,7 +15356,7 @@
           "value": 3.9
         }
       ],
-      "ageDays": -1
+      "ageDays": 0
     },
     "kimWright10y": {
       "value": 88.88,
@@ -17450,7 +17450,7 @@
           "value": 88.88
         }
       ],
-      "ageDays": 6
+      "ageDays": 7
     },
     "reserves": {
       "value": 2.9797,
@@ -17624,7 +17624,7 @@
           "value": 2.9797
         }
       ],
-      "ageDays": 8
+      "ageDays": 9
     },
     "tga": {
       "value": 916.613,
@@ -17798,7 +17798,7 @@
           "value": 916.613
         }
       ],
-      "ageDays": 8
+      "ageDays": 9
     },
     "onRrp": {
       "value": 0.3,
@@ -17972,7 +17972,7 @@
           "value": 0.3
         }
       ],
-      "ageDays": 1
+      "ageDays": 2
     },
     "igOas": {
       "value": 98,
@@ -18146,7 +18146,7 @@
           "value": 98
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "hyOas": {
       "value": 372,
@@ -18320,7 +18320,7 @@
           "value": 372
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "bbOas": {
       "value": 225,
@@ -18494,7 +18494,7 @@
           "value": 225
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "cccOas": {
       "value": 1405,
@@ -18668,7 +18668,7 @@
           "value": 1405
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "igYield": {
       "value": 5.85,
@@ -18842,7 +18842,7 @@
           "value": 5.85
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "hyYield": {
       "value": 8.44,
@@ -19016,7 +19016,7 @@
           "value": 8.44
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "mortgage30y": {
       "value": 7.21,
@@ -19190,7 +19190,7 @@
           "value": 7.21
         }
       ],
-      "ageDays": 1
+      "ageDays": 2
     },
     "vix": {
       "value": 26.36,
@@ -19364,7 +19364,7 @@
           "value": 26.36
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "corePceIndex": {
       "value": 131.312,
@@ -19538,7 +19538,7 @@
           "value": 131.312
         }
       ],
-      "ageDays": 56
+      "ageDays": 57
     },
     "coreCpiIndex": {
       "value": 339.9,
@@ -19712,7 +19712,7 @@
           "value": 339.9
         }
       ],
-      "ageDays": 56
+      "ageDays": 57
     },
     "payrolls": {
       "value": 159293,
@@ -19886,7 +19886,7 @@
           "value": 159293
         }
       ],
-      "ageDays": 56
+      "ageDays": 57
     },
     "unemployment": {
       "value": 4.1,
@@ -20060,7 +20060,7 @@
           "value": 4.1
         }
       ],
-      "ageDays": 56
+      "ageDays": 57
     },
     "sahm": {
       "value": 0,
@@ -20234,7 +20234,7 @@
           "value": 0
         }
       ],
-      "ageDays": 56
+      "ageDays": 57
     },
     "claims4wk": {
       "value": 196000,
@@ -20408,7 +20408,7 @@
           "value": 196000
         }
       ],
-      "ageDays": 5
+      "ageDays": 6
     },
     "wti": {
       "value": 82.24,
@@ -20582,7 +20582,7 @@
           "value": 82.24
         }
       ],
-      "ageDays": 2
+      "ageDays": 3
     },
     "nominalGdp": {
       "value": 33.0562,
@@ -20656,7 +20656,7 @@
           "value": 33.0562
         }
       ],
-      "ageDays": 148
+      "ageDays": 149
     },
     "netInterestAnnual": {
       "value": 1.3288,
@@ -20730,7 +20730,7 @@
           "value": 1.3288
         }
       ],
-      "ageDays": 148
+      "ageDays": 149
     },
     "usdjpy": {
       "value": 158.76,
@@ -20904,7 +20904,7 @@
           "value": 158.76
         }
       ],
-      "ageDays": 6
+      "ageDays": 7
     },
     "sofr": {
       "value": 3.94,
@@ -20915,7 +20915,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "SOFR",
-      "ageDays": 2
+      "ageDays": 3
     },
     "sofrP99": {
       "value": 4.02,
@@ -20926,7 +20926,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "SOFR 99th percentile",
-      "ageDays": 2
+      "ageDays": 3
     },
     "sofrP1": {
       "value": 3.87,
@@ -20937,7 +20937,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "SOFR 1st percentile",
-      "ageDays": 2
+      "ageDays": 3
     },
     "sofrVolume": {
       "value": 3158,
@@ -20948,7 +20948,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "SOFR volume",
-      "ageDays": 2
+      "ageDays": 3
     },
     "tgcr": {
       "value": 3.92,
@@ -20959,7 +20959,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "TGCR",
-      "ageDays": 2
+      "ageDays": 3
     },
     "bgcr": {
       "value": 3.92,
@@ -20970,7 +20970,7 @@
       "tag": "D",
       "staleAfterDays": 4,
       "label": "BGCR",
-      "ageDays": 2
+      "ageDays": 3
     },
     "debtHeldByPublic": {
       "value": 32.9531,
@@ -20981,7 +20981,7 @@
       "tag": "D",
       "staleAfterDays": 5,
       "label": "Debt held by the public",
-      "ageDays": 2
+      "ageDays": 3
     },
     "tgaDaily": {
       "value": 958.39,
@@ -20992,7 +20992,7 @@
       "tag": "D",
       "staleAfterDays": 5,
       "label": "TGA closing balance (daily)",
-      "ageDays": 2
+      "ageDays": 3
     },
     "corePce3mSaar": {
       "value": 3.6257,
@@ -21003,7 +21003,7 @@
       "staleAfterDays": 75,
       "periodDated": true,
       "label": "Core PCE 3m annualised",
-      "ageDays": 56
+      "ageDays": 57
     },
     "corePceYoY": {
       "value": 3.2611,
@@ -21014,7 +21014,7 @@
       "staleAfterDays": 75,
       "periodDated": true,
       "label": "Core PCE y/y",
-      "ageDays": 56
+      "ageDays": 57
     },
     "nfpChange": {
       "value": 165,
@@ -21025,7 +21025,7 @@
       "staleAfterDays": 70,
       "periodDated": true,
       "label": "Monthly payroll change",
-      "ageDays": 56
+      "ageDays": 57
     },
     "nfp3mAvg": {
       "value": 137,
@@ -21036,7 +21036,7 @@
       "staleAfterDays": 70,
       "periodDated": true,
       "label": "Payroll change, 3m average",
-      "ageDays": 56
+      "ageDays": 57
     },
     "nominalGrowthYoY": {
       "value": 6.0156,
@@ -21047,7 +21047,7 @@
       "staleAfterDays": 220,
       "periodDated": true,
       "label": "Nominal GDP growth y/y",
-      "ageDays": 148
+      "ageDays": 149
     },
     "effectiveDebtRate": {
       "value": 4.0324,
@@ -21058,7 +21058,7 @@
       "staleAfterDays": 220,
       "periodDated": true,
       "label": "Effective rate on debt held by the public",
-      "ageDays": 148
+      "ageDays": 149
     },
     "sofrMinusIorb": {
       "value": 4,
@@ -21069,7 +21069,7 @@
       "staleAfterDays": 4,
       "periodDated": false,
       "label": "SOFR less IORB",
-      "ageDays": 2
+      "ageDays": 3
     },
     "sofrTailWidth": {
       "value": 8,
@@ -21080,7 +21080,7 @@
       "staleAfterDays": 4,
       "periodDated": false,
       "label": "SOFR 99th percentile less median",
-      "ageDays": 2
+      "ageDays": 3
     },
     "cccMinusBb": {
       "value": 1180,
@@ -21091,7 +21091,7 @@
       "staleAfterDays": 4,
       "periodDated": false,
       "label": "CCC minus BB OAS",
-      "ageDays": 2
+      "ageDays": 3
     },
     "realPolicyRate": {
       "value": 0.6189,
@@ -21102,7 +21102,7 @@
       "staleAfterDays": 75,
       "periodDated": true,
       "label": "Real fed funds (EFFR less core PCE y/y)",
-      "ageDays": 2
+      "ageDays": 3
     }
   },
   "auctions": [],
